@@ -1,0 +1,54 @@
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500..800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500;600&display=swap');
+
+:root {
+  --bg0: #06070a;
+  --bg1: #0b0d12;
+  --text: rgba(248, 249, 253, 0.88);
+  --muted: rgba(248, 249, 253, 0.64);
+  --faint: rgba(248, 249, 253, 0.18);
+  --edge: rgba(248, 249, 253, 0.12);
+
+  --hot0: #ff2d1a;
+  --hot1: #ff7a18;
+  --hot2: #ffd66b;
+
+  --sans: 'IBM Plex Sans', system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  --display: 'Fraunces', serif;
+  --mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+
+  font: 16px/1.35 var(--sans);
+  letter-spacing: 0.2px;
+  color: var(--text);
+  background:
+    radial-gradient(900px 560px at 50% 42%, rgba(255, 90, 30, 0.11), transparent 64%),
+    radial-gradient(900px 560px at 72% 24%, rgba(164, 120, 255, 0.07), transparent 66%),
+    linear-gradient(180deg, var(--bg0), var(--bg1));
+  text-rendering: geometricPrecision;
+  font-synthesis: none;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  overflow-x: hidden;
+}
+
+#root {
+  min-height: 100svh;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+button,
+input {
+  font: inherit;
+  color: inherit;
+}
