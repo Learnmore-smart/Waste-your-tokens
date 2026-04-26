@@ -6,6 +6,9 @@ export type Usage = {
   prompt_tokens?: number
   completion_tokens?: number
   total_tokens?: number
+  /** Some OpenAI-compatible gateways (e.g. xAI) use these names. */
+  input_tokens?: number
+  output_tokens?: number
 }
 
 export interface SseStreamSnapshot {
@@ -96,11 +99,10 @@ export async function consumeOpenAiSse(
           if (data && typeof data === "object" && "usage" in data) {
             const u = (data as { usage?: Usage }).usage
             if (u && typeof u === "object") {
-              usage = {
-                prompt_tokens: u.prompt_tokens,
-                completion_tokens: u.completion_tokens,
-                total_tokens: u.total_tokens,
-              }
+              const pt = u.prompt_tokens ?? u.input_tokens
+              const ct = u.completion_tokens ?? u.output_tokens
+              const tt = u.total_tokens
+              usage = { prompt_tokens: pt, completion_tokens: ct, total_tokens: tt }
             }
           }
           if (data && typeof data === "object" && "choices" in data) {
@@ -128,12 +130,12 @@ export async function consumeOpenAiSse(
         }
         if (data && typeof data === "object" && "usage" in data) {
           const u = (data as { usage?: Usage }).usage
-          if (u && typeof u === "object")
-            usage = {
-              prompt_tokens: u.prompt_tokens,
-              completion_tokens: u.completion_tokens,
-              total_tokens: u.total_tokens,
-            }
+          if (u && typeof u === "object") {
+            const pt = u.prompt_tokens ?? u.input_tokens
+            const ct = u.completion_tokens ?? u.output_tokens
+            const tt = u.total_tokens
+            usage = { prompt_tokens: pt, completion_tokens: ct, total_tokens: tt }
+          }
         }
         if (data && typeof data === "object" && "choices" in data) {
           const ch = (data as { choices?: { delta?: unknown }[] }).choices

@@ -144,6 +144,7 @@ function loadInitialState(): BurnState {
       const parsed = JSON.parse(stored) as Partial<BurnState>
       const merged = { ...defaults, ...parsed }
       merged.drivingKm = carbonToDrivingKm(merged.carbonGrams)
+      merged.treesNeeded = carbonToTrees(merged.carbonGrams)
       return merged
     }
   } catch {}
@@ -208,16 +209,22 @@ export function useTokenBurner(parallelCount: number) {
     }
   }, [nParallel, isBurning])
 
-  /** Extracted token delta from one stream; shared by single + duo. */
+  /** Extracted token delta from one stream; shared by single + multi. */
   function usageFieldsFromSnapshot(
     model: string,
     snap: SseStreamSnapshot,
     promptText: string
   ): { model: string; promptDelta: number; completionDelta: number; totalDelta: number } {
-    let pt = snap.usage?.prompt_tokens ?? 0
-    let ct = snap.usage?.completion_tokens ?? 0
-    let tt = snap.usage?.total_tokens ?? 0
+    const u = snap.usage
+    let pt = u?.prompt_tokens ?? u?.input_tokens ?? 0
+    let ct = u?.completion_tokens ?? u?.output_tokens ?? 0
+    let tt = u?.total_tokens ?? 0
     if (tt === 0 && (pt > 0 || ct > 0)) tt = pt + ct
+    // Some providers only send total_tokens; without split, cost/impact (cost uses prompt+completion) stay at 0.
+    if (tt > 0 && pt === 0 && ct === 0) {
+      pt = Math.floor(tt / 2)
+      ct = tt - pt
+    }
     if (tt === 0) {
       const est = estimateTokensFromText(promptText, snap.text, snap.thought)
       pt = est.prompt_tokens
@@ -249,47 +256,6 @@ export function useTokenBurner(parallelCount: number) {
           totalCalls: newTotalCalls,
           promptTokens: newPromptTokens,
           completionTokens: newCompletionTokens,
-          estimatedCost: newCost,
-          carbonGrams: newCarbon,
-          drivingKm: newDrivingKm,
-          treesNeeded: newTrees,
-        }
-        persistMergedState(merged)
-        return merged
-      })
-    },
-    []
-  )
-
-  /** One state update for 2+ parallel streams. Price uses the last successful stream’s model. */
-  const applyMultiUsageToState = useCallback(
-    (items: ({ model: string; snap: SseStreamSnapshot; promptText: string } | null)[]) => {
-      const present = items.filter((x): x is NonNullable<typeof x> => x != null)
-      if (present.length === 0) return
-      setState((prev) => {
-        let totalTokens = prev.totalTokens
-        let totalCalls = prev.totalCalls
-        let promptTokens = prev.promptTokens
-        let completionTokens = prev.completionTokens
-        for (const item of present) {
-          const m = item.snap.model || item.model
-          const u = usageFieldsFromSnapshot(m, item.snap, item.promptText)
-          totalTokens += u.totalDelta
-          totalCalls += 1
-          promptTokens += u.promptDelta
-          completionTokens += u.completionDelta
-        }
-        const last = present[present.length - 1]!
-        const pricingModel = last.snap.model || last.model
-        const newCost = tokensToCost(promptTokens, completionTokens, pricingModel)
-        const newCarbon = tokensToCarbonGrams(totalTokens)
-        const newDrivingKm = carbonToDrivingKm(newCarbon)
-        const newTrees = carbonToTrees(newCarbon)
-        const merged: BurnState = {
-          totalTokens: totalTokens,
-          totalCalls: totalCalls,
-          promptTokens: promptTokens,
-          completionTokens: completionTokens,
           estimatedCost: newCost,
           carbonGrams: newCarbon,
           drivingKm: newDrivingKm,
@@ -382,100 +348,98 @@ export function useTokenBurner(parallelCount: number) {
     [applyUsageToState, readSettingsForRound]
   )
 
-  const runParallelStreamRound = useCallback(
-    async (signals: AbortSignal[]): Promise<RoundOutcome> => {
-      const n = signals.length
-      if (n < 2) return { kind: 'ok' }
-      setAwaiting({ mode: 'multi', pending: Array(n).fill(true) })
+  /** One stream for squad/duo slot; runs independently of other agents (no Promise.all between slots). */
+  const runSlotStreamRound = useCallback(
+    async (slot: number, nSlots: number, signal: AbortSignal): Promise<RoundOutcome> => {
+      setAwaiting((prev) => {
+        if (prev.mode !== 'multi' || prev.pending.length !== nSlots) {
+          return { mode: 'multi', pending: Array(nSlots).fill(false) }
+        }
+        const nextP = [...prev.pending]
+        if (slot < nextP.length) nextP[slot] = true
+        return { mode: 'multi', pending: nextP }
+      })
 
       const built = await readSettingsForRound()
       if (!built.ok) {
-        setAwaiting({ mode: 'multi', pending: Array(n).fill(false) })
+        setAwaiting((prev) => {
+          if (prev.mode !== 'multi' || prev.pending.length !== nSlots) return prev
+          const nextP = [...prev.pending]
+          if (slot < nextP.length) nextP[slot] = false
+          return { mode: 'multi', pending: nextP }
+        })
         return { kind: 'fatal', message: built.message }
       }
       const { settings: s, model } = built
-      const prompts = Array.from({ length: n }, () => getRandomPrompt())
+      const prompt = getRandomPrompt()
 
-      type OkRow = { kind: 'ok'; snap: Awaited<ReturnType<typeof consumeOpenAiSse>>; model: string; prompt: string }
-      type HttpRow = { kind: 'http'; res: Response }
-      type Row = OkRow | HttpRow
-
-      const doFetch = (slot: number, prompt: string, signal: AbortSignal): Promise<Row> => {
-        return (async () => {
-          const res = await fetch(withBasePath('/api/burn-stream'), {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              apiKey: s.apiKey,
-              baseUrl: s.baseUrl,
-              model,
-              temperature: s.temperature,
-              thinkingLevel: s.thinkingLevel,
-              prompt,
-            }),
-            signal,
-          })
-          if (!res.ok) return { kind: 'http' as const, res }
-          const snap = await consumeOpenAiSse(
-            res.body,
-            (u) => {
-              setAwaiting((prev) => {
-                if (prev.mode !== 'multi' || prev.pending.length !== n) return prev
-                if (!prev.pending[slot]) return prev
-                const nextP = [...prev.pending]
-                nextP[slot] = false
-                return { mode: 'multi', pending: nextP }
-              })
-              setMultiStream((prev) => {
-                const next = [...prev]
-                if (slot < next.length) next[slot] = { text: u.text, thought: u.thought }
-                return next
-              })
-            },
-            signal
-          )
-          return { kind: 'ok' as const, snap, model, prompt }
-        })()
-      }
-
-      const results = await Promise.all(
-        signals.map((sig, i) => doFetch(i, prompts[i]!, sig))
-      )
-
-      const handleHttp = async (r: HttpRow) => {
-        setAwaiting({ mode: 'multi', pending: Array(n).fill(false) })
-        const errData = await r.res.json().catch(() => ({}))
-        const msg =
-          (errData as { error?: string }).error || `Request failed with status ${r.res.status}`
-        if (r.res.status === 401) return { kind: 'fatal' as const, message: msg }
-        if (r.res.status === 429) {
-          return { kind: 'retry' as const, message: msg, delayMs: 5_000 }
-        }
-        if (r.res.status >= 500) {
-          return { kind: 'retry' as const, message: msg, delayMs: 2_500 }
-        }
-        return { kind: 'retry' as const, message: msg, delayMs: 1_500 }
-      }
-
-      const okPayload = (r: OkRow): { model: string; snap: SseStreamSnapshot; promptText: string } => ({
-        model: r.model,
-        snap: r.snap,
-        promptText: r.prompt,
+      const res = await fetch(withBasePath('/api/burn-stream'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          apiKey: s.apiKey,
+          baseUrl: s.baseUrl,
+          model,
+          temperature: s.temperature,
+          thinkingLevel: s.thinkingLevel,
+          prompt,
+        }),
+        signal,
       })
 
-      const payloads: (ReturnType<typeof okPayload> | null)[] = results.map((r) =>
-        r.kind === 'ok' ? okPayload(r) : null
-      )
-      applyMultiUsageToState(payloads)
-
-      for (const r of results) {
-        if (r.kind === 'http') return handleHttp(r)
+      if (!res.ok) {
+        setAwaiting((prev) => {
+          if (prev.mode !== 'multi' || prev.pending.length !== nSlots) return prev
+          const nextP = [...prev.pending]
+          if (slot < nextP.length) nextP[slot] = false
+          return { mode: 'multi', pending: nextP }
+        })
+        const errData = await res.json().catch(() => ({}))
+        const msg =
+          (errData as { error?: string }).error || `Request failed with status ${res.status}`
+        if (res.status === 401) {
+          return { kind: 'fatal', message: msg }
+        }
+        if (res.status === 429) {
+          return { kind: 'retry', message: msg, delayMs: 5_000 }
+        }
+        if (res.status >= 500) {
+          return { kind: 'retry', message: msg, delayMs: 2_500 }
+        }
+        return { kind: 'retry', message: msg, delayMs: 1_500 }
       }
 
-      setAwaiting({ mode: 'multi', pending: Array(n).fill(false) })
+      const snap = await consumeOpenAiSse(
+        res.body,
+        (u) => {
+          setAwaiting((prev) => {
+            if (prev.mode !== 'multi' || prev.pending.length !== nSlots) return prev
+            if (slot >= prev.pending.length) return prev
+            if (!prev.pending[slot]) return prev
+            const nextP = [...prev.pending]
+            nextP[slot] = false
+            return { mode: 'multi', pending: nextP }
+          })
+          setMultiStream((prev) => {
+            const next = [...prev]
+            if (slot < next.length) next[slot] = { text: u.text, thought: u.thought }
+            return next
+          })
+        },
+        signal
+      )
+
+      setAwaiting((prev) => {
+        if (prev.mode !== 'multi' || prev.pending.length !== nSlots) return prev
+        const nextP = [...prev.pending]
+        if (slot < nextP.length) nextP[slot] = false
+        return { mode: 'multi', pending: nextP }
+      })
+      const m = snap.model || model
+      applyUsageToState({ model: m, snap, promptText: prompt })
       return { kind: 'ok' }
     },
-    [applyMultiUsageToState, readSettingsForRound]
+    [applyUsageToState, readSettingsForRound]
   )
 
   const startBurning = useCallback(() => {
@@ -487,69 +451,125 @@ export function useTokenBurner(parallelCount: number) {
     const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
     const run = async () => {
-      let backoffAttempt = 0
-      while (loopActiveRef.current) {
-        const multi = nParallel > 1
-        const controllers = multi
-          ? Array.from({ length: nParallel }, () => new AbortController())
-          : [new AbortController()]
-        abortRef.current = controllers
-        try {
-          const outcome = multi
-            ? await runParallelStreamRound(controllers.map((c) => c.signal))
-            : await runOneStreamRound(controllers[0]!.signal)
-          if (!loopActiveRef.current) break
-          if (outcome.kind === 'fatal') {
-            setError(outcome.message)
-            break
-          }
-          if (outcome.kind === 'retry') {
-            backoffAttempt += 1
-            const extra = Math.min(30_000, 800 * 2 ** Math.min(backoffAttempt, 6))
-            const wait = outcome.delayMs + extra
-            const line = `${outcome.message} — ${backoffAttempt > 0 ? 'Will retry' : 'Retrying'} in ${(wait / 1000).toFixed(1)}s (agent loop, click Stop to end).`
-            setError(null)
-            toast.warning(line, {
-              duration: Math.min(30_000, wait + 4_000),
-            })
-            if (!loopActiveRef.current) break
-            await sleep(wait)
-            if (!loopActiveRef.current) break
-            continue
-          }
-          backoffAttempt = 0
-          setError(null)
-          await sleep(350)
-        } catch (err) {
-          if (err instanceof Error && err.name === 'AbortError') {
-            setAwaiting(
-              nParallel > 1
-                ? { mode: 'multi', pending: Array(nParallel).fill(false) }
-                : { mode: 'single', v: false }
-            )
-            break
-          }
-          setAwaiting(
-            nParallel > 1
-              ? { mode: 'multi', pending: Array(nParallel).fill(false) }
-              : { mode: 'single', v: false }
-          )
-          backoffAttempt += 1
-          const wait = Math.min(20_000, 1500 * 2 ** Math.min(backoffAttempt, 5))
-          const line = `${err instanceof Error ? err.message : 'Network error'} — Retrying in ${(wait / 1000).toFixed(1)}s…`
-          setError(null)
-          toast.warning(line, {
-            duration: Math.min(25_000, wait + 3_000),
-          })
-          await sleep(wait)
+      const n = nParallel
+      const abortAll = () => {
+        for (const c of abortRef.current) {
+          c.abort()
         }
       }
+
+      const runSoloMainLoop = async () => {
+        let backoffAttempt = 0
+        while (loopActiveRef.current) {
+          const c = new AbortController()
+          abortRef.current = [c]
+          try {
+            const outcome = await runOneStreamRound(c.signal)
+            if (!loopActiveRef.current) break
+            if (outcome.kind === 'fatal') {
+              setError(outcome.message)
+              break
+            }
+            if (outcome.kind === 'retry') {
+              backoffAttempt += 1
+              const extra = Math.min(30_000, 800 * 2 ** Math.min(backoffAttempt, 6))
+              const wait = outcome.delayMs + extra
+              const line = `${outcome.message} — ${backoffAttempt > 0 ? 'Will retry' : 'Retrying'} in ${(wait / 1000).toFixed(1)}s (agent loop, click Stop to end).`
+              setError(null)
+              toast.warning(line, {
+                duration: Math.min(30_000, wait + 4_000),
+              })
+              if (!loopActiveRef.current) break
+              await sleep(wait)
+              if (!loopActiveRef.current) break
+              continue
+            }
+            backoffAttempt = 0
+            setError(null)
+            await sleep(350)
+          } catch (err) {
+            if (err instanceof Error && err.name === 'AbortError') {
+              setAwaiting({ mode: 'single', v: false })
+              break
+            }
+            setAwaiting({ mode: 'single', v: false })
+            backoffAttempt += 1
+            const wait = Math.min(20_000, 1500 * 2 ** Math.min(backoffAttempt, 5))
+            const line = `${err instanceof Error ? err.message : 'Network error'} — Retrying in ${(wait / 1000).toFixed(1)}s…`
+            setError(null)
+            toast.warning(line, {
+              duration: Math.min(25_000, wait + 3_000),
+            })
+            await sleep(wait)
+          }
+        }
+      }
+
+      const runSlotWorker = async (slot: number) => {
+        let backoffAttempt = 0
+        while (loopActiveRef.current) {
+          const c = new AbortController()
+          if (abortRef.current.length !== n) {
+            abortRef.current = Array.from({ length: n }, () => new AbortController())
+          }
+          abortRef.current[slot] = c
+          try {
+            const outcome = await runSlotStreamRound(slot, n, c.signal)
+            if (!loopActiveRef.current) break
+            if (outcome.kind === 'fatal') {
+              setError(outcome.message)
+              loopActiveRef.current = false
+              abortAll()
+              break
+            }
+            if (outcome.kind === 'retry') {
+              backoffAttempt += 1
+              const extra = Math.min(30_000, 800 * 2 ** Math.min(backoffAttempt, 6))
+              const wait = outcome.delayMs + extra
+              const line = `Agent ${slot + 1}: ${outcome.message} — ${backoffAttempt > 0 ? 'Will retry' : 'Retrying'} in ${(wait / 1000).toFixed(1)}s.`
+              setError(null)
+              toast.warning(line, {
+                duration: Math.min(30_000, wait + 4_000),
+              })
+              if (!loopActiveRef.current) break
+              await sleep(wait)
+              if (!loopActiveRef.current) break
+              continue
+            }
+            backoffAttempt = 0
+            setError(null)
+            await sleep(350)
+          } catch (err) {
+            if (err instanceof Error && err.name === 'AbortError') {
+              setAwaiting({ mode: 'multi', pending: Array(n).fill(false) })
+              break
+            }
+            setAwaiting({ mode: 'multi', pending: Array(n).fill(false) })
+            backoffAttempt += 1
+            const wait = Math.min(20_000, 1500 * 2 ** Math.min(backoffAttempt, 5))
+            const line = `Agent ${slot + 1}: ${err instanceof Error ? err.message : 'Network error'} — Retrying in ${(wait / 1000).toFixed(1)}s…`
+            setError(null)
+            toast.warning(line, {
+              duration: Math.min(25_000, wait + 3_000),
+            })
+            await sleep(wait)
+          }
+        }
+      }
+
+      if (n === 1) {
+        await runSoloMainLoop()
+      } else {
+        abortRef.current = Array.from({ length: n }, () => new AbortController())
+        await Promise.all(Array.from({ length: n }, (_, slot) => runSlotWorker(slot)))
+      }
+
       loopActiveRef.current = false
       setIsBurning(false)
       abortRef.current = []
     }
     void run()
-  }, [runOneStreamRound, runParallelStreamRound, nParallel])
+  }, [runOneStreamRound, runSlotStreamRound, nParallel])
 
   const stopBurn = useCallback(() => {
     loopActiveRef.current = false
