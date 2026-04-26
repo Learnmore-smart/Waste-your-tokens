@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { toast } from 'sonner'
-import { tokensToCost, tokensToCarbonGrams, carbonToMiles, carbonToTrees } from '@/lib/conversions'
+import { tokensToCost, tokensToCarbonGrams, carbonToDrivingKm, carbonToTrees } from '@/lib/conversions'
 import { getRandomPrompt } from '@/lib/promptPool'
 import { decryptApiKey, isEncrypted } from '@/lib/crypto'
 import { withBasePath } from '@/lib/basePath'
@@ -77,7 +77,7 @@ interface BurnState {
   completionTokens: number
   estimatedCost: number
   carbonGrams: number
-  milesDriven: number
+  drivingKm: number
   treesNeeded: number
 }
 
@@ -102,15 +102,17 @@ function loadInitialState(): BurnState {
     completionTokens: 0,
     estimatedCost: 0,
     carbonGrams: 0,
-    milesDriven: 0,
+    drivingKm: 0,
     treesNeeded: 0,
   }
   if (typeof window === 'undefined') return defaults
   try {
     const stored = localStorage.getItem(STATE_STORAGE_KEY)
     if (stored) {
-      const parsed = JSON.parse(stored)
-      return { ...defaults, ...parsed }
+      const parsed = JSON.parse(stored) as Partial<BurnState>
+      const merged = { ...defaults, ...parsed }
+      merged.drivingKm = carbonToDrivingKm(merged.carbonGrams)
+      return merged
     }
   } catch {}
   return defaults
@@ -126,7 +128,7 @@ function persistMergedState(merged: BurnState) {
       completionTokens: merged.completionTokens,
       estimatedCost: merged.estimatedCost,
       carbonGrams: merged.carbonGrams,
-      milesDriven: merged.milesDriven,
+      drivingKm: merged.drivingKm,
       treesNeeded: merged.treesNeeded,
     })
   )
@@ -205,7 +207,7 @@ export function useTokenBurner(duoMode: boolean) {
         const newCompletionTokens = prev.completionTokens + u.completionDelta
         const newCost = tokensToCost(newPromptTokens, newCompletionTokens, model)
         const newCarbon = tokensToCarbonGrams(newTotalTokens)
-        const newMiles = carbonToMiles(newCarbon)
+        const newDrivingKm = carbonToDrivingKm(newCarbon)
         const newTrees = carbonToTrees(newCarbon)
         const merged: BurnState = {
           totalTokens: newTotalTokens,
@@ -214,7 +216,7 @@ export function useTokenBurner(duoMode: boolean) {
           completionTokens: newCompletionTokens,
           estimatedCost: newCost,
           carbonGrams: newCarbon,
-          milesDriven: newMiles,
+          drivingKm: newDrivingKm,
           treesNeeded: newTrees,
         }
         persistMergedState(merged)
@@ -246,7 +248,7 @@ export function useTokenBurner(duoMode: boolean) {
         const pricingModel = second.snap.model || second.model
         const newCost = tokensToCost(promptTokens, completionTokens, pricingModel)
         const newCarbon = tokensToCarbonGrams(totalTokens)
-        const newMiles = carbonToMiles(newCarbon)
+        const newDrivingKm = carbonToDrivingKm(newCarbon)
         const newTrees = carbonToTrees(newCarbon)
         const merged: BurnState = {
           totalTokens: totalTokens,
@@ -255,7 +257,7 @@ export function useTokenBurner(duoMode: boolean) {
           completionTokens: completionTokens,
           estimatedCost: newCost,
           carbonGrams: newCarbon,
-          milesDriven: newMiles,
+          drivingKm: newDrivingKm,
           treesNeeded: newTrees,
         }
         persistMergedState(merged)
@@ -543,7 +545,7 @@ export function useTokenBurner(duoMode: boolean) {
     completionTokens: state.completionTokens,
     estimatedCost: state.estimatedCost,
     carbonGrams: state.carbonGrams,
-    milesDriven: state.milesDriven,
+    drivingKm: state.drivingKm,
     treesNeeded: state.treesNeeded,
     isBurning,
     error,

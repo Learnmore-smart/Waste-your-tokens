@@ -168,7 +168,7 @@ export default function Home() {
     totalCalls,
     estimatedCost,
     carbonGrams,
-    milesDriven,
+    drivingKm,
     treesNeeded,
     isBurning,
     error,
@@ -441,7 +441,7 @@ export default function Home() {
                 <div className="w-full max-w-3xl mt-2 pt-8 border-t border-border">
                   <GuiltTracker
                     carbonGrams={carbonGrams}
-                    milesDriven={milesDriven}
+                    drivingKm={drivingKm}
                     treesNeeded={treesNeeded}
                   />
                 </div>

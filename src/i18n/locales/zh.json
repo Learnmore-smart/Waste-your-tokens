@@ -54,10 +54,10 @@
       "suffix": " g CO₂",
       "detail": "词元生成产生的预估排放量"
     },
-    "milesDriven": {
+    "drivingKm": {
       "label": "行驶里程",
-      "suffix": " 英里",
-      "detail": "相当于驾驶普通汽车产生的 CO₂"
+      "suffix": " 公里",
+      "detail": "相当于驾驶普通乘用车产生的 CO₂"
     },
     "treesToOffset": {
       "label": "需种植树木",

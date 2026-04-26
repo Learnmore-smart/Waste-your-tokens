@@ -12,7 +12,7 @@ import { decimalsForMagnitude } from '@/lib/impactFormat'
 
 interface GuiltTrackerProps {
   carbonGrams: number
-  milesDriven: number
+  drivingKm: number
   treesNeeded: number
 }
 
@@ -34,15 +34,14 @@ function getIntensity(value: number, ref: number): number {
   return Math.min(1, value / ref)
 }
 
-export default function GuiltTracker({ carbonGrams, milesDriven, treesNeeded }: GuiltTrackerProps) {
+export default function GuiltTracker({ carbonGrams, drivingKm, treesNeeded }: GuiltTrackerProps) {
   const { t } = useI18n()
 
   const smartphonesCharged = carbonToSmartphones(carbonGrams)
   const googleSearches = carbonToSearches(carbonGrams)
   const streamingHours = carbonToStreamingHours(carbonGrams)
 
-  const dMiles =
-    milesDriven === 0 ? 0 : Math.max(2, decimalsForMagnitude(milesDriven, 4))
+  const dKm = drivingKm === 0 ? 0 : Math.max(2, decimalsForMagnitude(drivingKm, 4))
   const dTrees = treesNeeded === 0 ? 0 : decimalsForMagnitude(treesNeeded, 5)
   const dPhones =
     smartphonesCharged === 0
@@ -65,16 +64,16 @@ export default function GuiltTracker({ carbonGrams, milesDriven, treesNeeded }: 
       intensityRef: 500,
     },
     {
-      labelKey: 'impact.milesDriven.label',
-      value: milesDriven,
-      decimals: dMiles,
-      suffixKey: 'impact.milesDriven.suffix',
-      detailKey: 'impact.milesDriven.detail',
+      labelKey: 'impact.drivingKm.label',
+      value: drivingKm,
+      decimals: dKm,
+      suffixKey: 'impact.drivingKm.suffix',
+      detailKey: 'impact.drivingKm.detail',
       gradient: 'linear-gradient(to top, rgba(55,50,45,0.4) 0%, rgba(55,50,45,0.1) 40%, transparent 70%)',
       blob: 'rgba(80,75,70,0.2)',
       blobPosition: '-bottom-6 left-1/2 -translate-x-1/2',
       numberColor: '#5E5854',
-      intensityRef: 5,
+      intensityRef: 8,
     },
     {
       labelKey: 'impact.treesToOffset.label',

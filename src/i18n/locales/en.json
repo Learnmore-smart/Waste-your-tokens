@@ -54,10 +54,10 @@
       "suffix": " g CO₂",
       "detail": "Estimated emissions from token generation"
     },
-    "milesDriven": {
-      "label": "Miles Driven",
-      "suffix": " mi",
-      "detail": "Equivalent CO₂ from driving an average car"
+    "drivingKm": {
+      "label": "Driving (equiv.)",
+      "suffix": " km",
+      "detail": "Equivalent CO₂ from driving an average passenger car"
     },
     "treesToOffset": {
       "label": "Trees to Offset",
