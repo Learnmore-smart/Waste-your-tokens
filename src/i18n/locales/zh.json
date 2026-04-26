@@ -1,0 +1,98 @@
+{
+  "app": {
+    "title": "浪费你的 Token",
+    "description": "最令人满足的 LLM API Token 燃烧方式"
+  },
+  "tabs": {
+    "burn": "燃烧",
+    "impact": "影响",
+    "history": "历史",
+    "settings": "设置"
+  },
+  "header": {
+    "tokens": "Token",
+    "calls": "次调用"
+  },
+  "burn": {
+    "autoBurn": "自动燃烧",
+    "interval": "间隔",
+    "dismiss": "忽略",
+    "reset": "重置",
+    "export": "导出"
+  },
+  "burnButton": {
+    "idle": "燃烧 Token",
+    "burning": "停止",
+    "autoBurning": "停止",
+    "error": "重试"
+  },
+  "impact": {
+    "title": "环境影响",
+    "subtitle": "每一个被燃烧的 Token 都在地球上留下了痕迹。这是你的。",
+    "carbonFootprint": {
+      "label": "碳足迹",
+      "suffix": " g CO₂",
+      "detail": "Token 生成产生的预估排放量"
+    },
+    "milesDriven": {
+      "label": "行驶里程",
+      "suffix": " 英里",
+      "detail": "相当于驾驶普通汽车产生的 CO₂"
+    },
+    "treesToOffset": {
+      "label": "需种植树木",
+      "suffix": "",
+      "detail": "吸收这些 CO₂ 所需的树木数量"
+    },
+    "smartphonesCharged": {
+      "label": "手机充电次数",
+      "suffix": "",
+      "detail": "相当于给这么多部手机充满电"
+    },
+    "googleSearches": {
+      "label": "谷歌搜索次数",
+      "suffix": "",
+      "detail": "与这么多次搜索产生的排放量相同"
+    },
+    "streamingHours": {
+      "label": "视频流媒体时长",
+      "suffix": " 小时",
+      "detail": "相当于流媒体播放这么长时间"
+    },
+    "disclaimer": "估算基于 Patterson 等人 (2022)、EPA (2024)、Carbon Trust 和 Arbor Day Foundation 的数据。实际排放量因数据中心能源来源、模型大小和硬件效率而异。"
+  },
+  "history": {
+    "empty": "暂无燃烧记录。开始燃烧以在此查看记录。",
+    "time": "时间",
+    "model": "模型",
+    "prompt": "提示词",
+    "completion": "补全",
+    "total": "总计",
+    "cost": "费用"
+  },
+  "settings": {
+    "title": "配置",
+    "subtitle": "设置你的 API 提供商和偏好。提示词随机生成以最大化 Token 浪费。",
+    "provider": "提供商",
+    "apiKey": "API 密钥",
+    "show": "显示",
+    "hide": "隐藏",
+    "apiKeyHint": "使用 AES-256-GCM 本地加密。直接发送给 API 提供商。",
+    "model": "模型",
+    "customModelOption": "自定义…",
+    "customModelPlaceholder": "输入自定义模型名称",
+    "baseUrl": "基础 URL",
+    "baseUrlHint": "必须是兼容 OpenAI 的 API 端点。末尾斜杠会自动移除。",
+    "maxTokens": "最大 Token 数",
+    "thinkingBudget": "思考预算",
+    "thinkingBudgetHint": ">0 用于推理模型。0 = 禁用。",
+    "temperature": "温度",
+    "precise": "精确 (0)",
+    "creative": "创意 (2)",
+    "save": "保存设置"
+  },
+  "languageToggle": {
+    "en": "EN",
+    "zh": "中文"
+  }
+}

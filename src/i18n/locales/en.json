@@ -1,0 +1,98 @@
+{
+  "app": {
+    "title": "Waste Your Tokens",
+    "description": "The most satisfying way to burn LLM API tokens"
+  },
+  "tabs": {
+    "burn": "Burn",
+    "impact": "Impact",
+    "history": "History",
+    "settings": "Settings"
+  },
+  "header": {
+    "tokens": "tokens",
+    "calls": "calls"
+  },
+  "burn": {
+    "autoBurn": "Auto Burn",
+    "interval": "Interval",
+    "dismiss": "Dismiss",
+    "reset": "Reset",
+    "export": "Export"
+  },
+  "burnButton": {
+    "idle": "Burn Tokens",
+    "burning": "Stop",
+    "autoBurning": "Stop",
+    "error": "Retry"
+  },
+  "impact": {
+    "title": "Environmental Impact",
+    "subtitle": "Every token burned leaves a mark on the planet. Here's what yours looks like.",
+    "carbonFootprint": {
+      "label": "Carbon Footprint",
+      "suffix": " g CO₂",
+      "detail": "Estimated emissions from token generation"
+    },
+    "milesDriven": {
+      "label": "Miles Driven",
+      "suffix": " mi",
+      "detail": "Equivalent CO₂ from driving an average car"
+    },
+    "treesToOffset": {
+      "label": "Trees to Offset",
+      "suffix": "",
+      "detail": "Trees needed to absorb this CO₂"
+    },
+    "smartphonesCharged": {
+      "label": "Smartphones Charged",
+      "suffix": "",
+      "detail": "Equivalent to fully charging this many phones"
+    },
+    "googleSearches": {
+      "label": "Google Searches",
+      "suffix": "",
+      "detail": "Same emissions as this many searches"
+    },
+    "streamingHours": {
+      "label": "Streaming Hours",
+      "suffix": " hrs",
+      "detail": "Equivalent to streaming video for this long"
+    },
+    "disclaimer": "Estimates based on Patterson et al. (2022), EPA (2024), Carbon Trust, and Arbor Day Foundation data. Actual emissions vary by data center energy source, model size, and hardware efficiency."
+  },
+  "history": {
+    "empty": "No burn history yet. Start burning to see records here.",
+    "time": "Time",
+    "model": "Model",
+    "prompt": "Prompt",
+    "completion": "Completion",
+    "total": "Total",
+    "cost": "Cost"
+  },
+  "settings": {
+    "title": "Configuration",
+    "subtitle": "Set up your API provider and preferences. Prompts are randomly generated to maximize token waste.",
+    "provider": "Provider",
+    "apiKey": "API Key",
+    "show": "Show",
+    "hide": "Hide",
+    "apiKeyHint": "Encrypted locally with AES-256-GCM. Sent directly to the API provider.",
+    "model": "Model",
+    "customModelOption": "Custom…",
+    "customModelPlaceholder": "Enter custom model name",
+    "baseUrl": "Base URL",
+    "baseUrlHint": "Must be an OpenAI-compatible API endpoint. Trailing slashes are auto-removed.",
+    "maxTokens": "Max Tokens",
+    "thinkingBudget": "Thinking Budget",
+    "thinkingBudgetHint": ">0 for reasoning models. 0 = disabled.",
+    "temperature": "Temperature",
+    "precise": "Precise (0)",
+    "creative": "Creative (2)",
+    "save": "Save Settings"
+  },
+  "languageToggle": {
+    "en": "EN",
+    "zh": "中文"
+  }
+}

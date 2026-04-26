@@ -1,0 +1,19 @@
+- [ ] Next.js project scaffolds and dev server starts without errors
+- [ ] API route `/api/burn` successfully proxies requests to OpenAI-compatible endpoints and returns token usage
+- [ ] API route handles errors gracefully and returns structured error JSON
+- [ ] "Burn Tokens" button is prominently centered and visually dominant on the page
+- [ ] Button shows fire/glow animation when pressed and pulses during API call
+- [ ] Fire/ember particle effect plays on button press
+- [ ] Live Metrics Dashboard displays: Total Tokens Wasted, Total API Calls, Estimated Cost
+- [ ] Metrics numbers animate with counting-up effect when updated
+- [ ] Environmental Guilt Tracker displays: Carbon Footprint (g CO₂), Equivalent Miles Driven, Trees Needed to Offset
+- [ ] Settings sidebar slides in from the right with gear icon trigger
+- [ ] Settings sidebar contains: API Key input (password field), Model selector dropdown, Base URL input
+- [ ] Settings are persisted to localStorage and survive page reload
+- [ ] App prompts user to configure API key if none is set when clicking Burn
+- [ ] Main screen is clutter-free — only the button, metrics, and guilt tracker visible by default
+- [ ] Dark, fiery, industrial-brutalist aesthetic with orange/amber/red accents
+- [ ] Animations respect `prefers-reduced-motion` media query
+- [ ] `npm run build 2>&1` completes without errors
+- [ ] `npm run lint` passes without errors
+- [ ] App works end-to-end: configure API key → click Burn → see metrics update → see guilt tracker update
