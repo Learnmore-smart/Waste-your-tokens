@@ -226,16 +226,8 @@ export function useTokenBurner(parallelCount: number) {
       ct = tt - pt
     }
 
-    const est = estimateTokensFromText(promptText, snap.text, snap.thought)
-    const streamedChars = snap.text.length + snap.thought.length
-    // Custom / compat gateways often omit stream usage (400 on stream_options) or return totals
-    // below what was actually streamed (reasoning channels, broken aggregators).
-    const estClearlyHigher =
-      streamedChars >= 400 &&
-      tt > 0 &&
-      (est.total_tokens > tt * 1.12 || est.total_tokens > tt + 2_000)
-
-    if (tt === 0 || estClearlyHigher) {
+    if (tt === 0) {
+      const est = estimateTokensFromText(promptText, snap.text, snap.thought)
       pt = est.prompt_tokens
       ct = est.completion_tokens
       tt = est.total_tokens

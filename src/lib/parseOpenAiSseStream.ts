@@ -11,6 +11,72 @@ export type Usage = {
   output_tokens?: number
 }
 
+function pickFiniteNumber(...candidates: unknown[]): number | undefined {
+  for (const v of candidates) {
+    if (typeof v === "number" && Number.isFinite(v)) return v
+    if (typeof v === "string" && v.trim() !== "" && Number.isFinite(Number(v))) return Number(v)
+  }
+  return undefined
+}
+
+/** Normalize one chunk's `usage` (snake_case, camelCase, input/output aliases). */
+function normalizeUsageChunk(raw: unknown): Usage | null {
+  if (!raw || typeof raw !== "object") return null
+  const u = raw as Record<string, unknown>
+  const pt = pickFiniteNumber(
+    u.prompt_tokens,
+    u.input_tokens,
+    u.promptTokens,
+    u.inputTokens
+  )
+  const ct = pickFiniteNumber(
+    u.completion_tokens,
+    u.output_tokens,
+    u.completionTokens,
+    u.outputTokens
+  )
+  const tt = pickFiniteNumber(u.total_tokens, u.totalTokens)
+  if (pt == null && ct == null && tt == null) return null
+  return {
+    prompt_tokens: pt,
+    completion_tokens: ct,
+    total_tokens: tt,
+  }
+}
+
+/** Prefer monotonic totals when gateways emit multiple usage snapshots. */
+function mergeUsage(prev: Usage | null, next: Usage): Usage {
+  if (!prev) return next
+  const pt = Math.max(prev.prompt_tokens ?? 0, next.prompt_tokens ?? 0)
+  const ct = Math.max(prev.completion_tokens ?? 0, next.completion_tokens ?? 0)
+  const ttRaw = Math.max(prev.total_tokens ?? 0, next.total_tokens ?? 0)
+  let tt = Math.max(ttRaw, pt + ct)
+  if (tt === 0 && (pt > 0 || ct > 0)) tt = pt + ct
+  return { prompt_tokens: pt, completion_tokens: ct, total_tokens: tt }
+}
+
+function usageFromChatChunk(data: Record<string, unknown>): unknown {
+  if ("usage" in data) return data.usage
+  const ch = data.choices
+  if (Array.isArray(ch) && ch[0] && typeof ch[0] === "object" && ch[0] !== null) {
+    const u = (ch[0] as { usage?: unknown }).usage
+    if (u !== undefined) return u
+  }
+  return undefined
+}
+
+function ingestUsageFromData(data: unknown, into: { current: Usage | null }): void {
+  if (!data || typeof data !== "object") return
+  const raw = usageFromChatChunk(data as Record<string, unknown>)
+  const norm = normalizeUsageChunk(raw)
+  if (!norm) return
+  const pt = norm.prompt_tokens ?? 0
+  const ct = norm.completion_tokens ?? 0
+  const tt = norm.total_tokens ?? 0
+  if (pt === 0 && ct === 0 && tt === 0) return
+  into.current = mergeUsage(into.current, norm)
+}
+
 export interface SseStreamSnapshot {
   text: string
   thought: string
@@ -66,11 +132,11 @@ export async function consumeOpenAiSse(
   const dec = new TextDecoder()
   let buffer = ""
   const acc = { s: "", t: "" }
-  let usage: Usage | null = null
+  const usageAcc = { current: null as Usage | null }
   let model: string | null = null
 
   const emit = () => {
-    onUpdate({ text: acc.s, thought: acc.t, usage, model })
+    onUpdate({ text: acc.s, thought: acc.t, usage: usageAcc.current, model })
   }
 
   while (!signal.aborted) {
@@ -86,7 +152,7 @@ export async function consumeOpenAiSse(
       if (t.startsWith(":")) continue
       if (t === "data: [DONE]") {
         emit()
-        return { text: acc.s, thought: acc.t, usage, model }
+        return { text: acc.s, thought: acc.t, usage: usageAcc.current, model }
       }
       if (t.startsWith("data: ")) {
         const jsonStr = t.slice(6)
@@ -96,15 +162,7 @@ export async function consumeOpenAiSse(
             const m = (data as { model?: string }).model
             if (typeof m === "string") model = m
           }
-          if (data && typeof data === "object" && "usage" in data) {
-            const u = (data as { usage?: Usage }).usage
-            if (u && typeof u === "object") {
-              const pt = u.prompt_tokens ?? u.input_tokens
-              const ct = u.completion_tokens ?? u.output_tokens
-              const tt = u.total_tokens
-              usage = { prompt_tokens: pt, completion_tokens: ct, total_tokens: tt }
-            }
-          }
+          ingestUsageFromData(data, usageAcc)
           if (data && typeof data === "object" && "choices" in data) {
             const ch = (data as { choices?: { delta?: unknown }[] }).choices
             if (ch?.[0]?.delta) appendDelta(ch[0].delta, acc)
@@ -128,15 +186,7 @@ export async function consumeOpenAiSse(
           const m = (data as { model?: string }).model
           if (typeof m === "string") model = m
         }
-        if (data && typeof data === "object" && "usage" in data) {
-          const u = (data as { usage?: Usage }).usage
-          if (u && typeof u === "object") {
-            const pt = u.prompt_tokens ?? u.input_tokens
-            const ct = u.completion_tokens ?? u.output_tokens
-            const tt = u.total_tokens
-            usage = { prompt_tokens: pt, completion_tokens: ct, total_tokens: tt }
-          }
-        }
+        ingestUsageFromData(data, usageAcc)
         if (data && typeof data === "object" && "choices" in data) {
           const ch = (data as { choices?: { delta?: unknown }[] }).choices
           if (ch?.[0]?.delta) appendDelta(ch[0].delta, acc)
@@ -147,7 +197,7 @@ export async function consumeOpenAiSse(
     }
   }
 
-  return { text: acc.s, thought: acc.t, usage, model }
+  return { text: acc.s, thought: acc.t, usage: usageAcc.current, model }
 }
 
 /** UTF-8 byte length — better than code units for CJK-ish token-ish heuristics. */

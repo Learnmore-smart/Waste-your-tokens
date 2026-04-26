@@ -85,16 +85,7 @@ export async function POST(request: NextRequest) {
 
   const apiUrl = resolveOpenAiChatCompletionsUrl(cleanedBase);
 
-  let requestBody = buildOpenAiStyleChatBody(cleanedBase, {
-    model,
-    prompt,
-    temperature,
-    thinkingLevel,
-    stream: true,
-    includeUsage: true,
-  });
-
-  const tryStream = async (): Promise<Response> =>
+  const tryStream = async (requestBody: Record<string, unknown>): Promise<Response> =>
     fetch(apiUrl, {
       method: "POST",
       headers: {
@@ -104,22 +95,58 @@ export async function POST(request: NextRequest) {
       body: JSON.stringify(requestBody),
     });
 
-  let upstream = await tryStream();
+  /** Order matters: keep `stream_options.include_usage` until we know the gateway rejects it. */
+  const bodies: Record<string, unknown>[] = [];
+  const pushUniqueBody = (body: Record<string, unknown>) => {
+    const key = JSON.stringify(body);
+    if (bodies.some((b) => JSON.stringify(b) === key)) return;
+    bodies.push(body);
+  };
 
-  // Some providers reject stream_options, huge max_tokens, or thinking fields — progressively strip
-  if (!upstream.ok && upstream.status === 400) {
-    requestBody = buildOpenAiStyleChatBody(cleanedBase, {
+  pushUniqueBody(
+    buildOpenAiStyleChatBody(cleanedBase, {
+      model,
+      prompt,
+      temperature,
+      thinkingLevel,
+      stream: true,
+      includeUsage: true,
+    })
+  );
+  if (thinkingLevel !== "off") {
+    pushUniqueBody(
+      buildOpenAiStyleChatBody(cleanedBase, {
+        model,
+        prompt,
+        temperature,
+        thinkingLevel: "off",
+        stream: true,
+        includeUsage: true,
+      })
+    );
+  }
+  pushUniqueBody(
+    buildOpenAiStyleChatBody(cleanedBase, {
       model,
       prompt,
       temperature,
       thinkingLevel,
       stream: true,
       includeUsage: false,
-    });
-    upstream = await tryStream();
-  }
-  if (!upstream.ok && upstream.status === 400) {
-    requestBody = buildOpenAiStyleChatBody(cleanedBase, {
+    })
+  );
+  pushUniqueBody(
+    buildOpenAiStyleChatBody(cleanedBase, {
+      model,
+      prompt,
+      temperature,
+      thinkingLevel: "off",
+      stream: true,
+      includeUsage: false,
+    })
+  );
+  pushUniqueBody(
+    buildOpenAiStyleChatBody(cleanedBase, {
       model,
       prompt,
       temperature,
@@ -127,8 +154,50 @@ export async function POST(request: NextRequest) {
       stream: true,
       includeUsage: false,
       maxOutputCap: 4096,
-    });
-    upstream = await tryStream();
+    })
+  );
+
+  let upstream: Response | null = null;
+  let last400Body = "";
+
+  for (const requestBody of bodies) {
+    const res = await tryStream(requestBody);
+    if (res.ok) {
+      upstream = res;
+      break;
+    }
+    if (res.status === 400) {
+      last400Body = await res.text();
+      continue;
+    }
+    upstream = res;
+    break;
+  }
+
+  if (!upstream) {
+    const raw = last400Body;
+    let errorMessage = "API returned status 400";
+    if (raw) {
+      try {
+        const err = JSON.parse(raw) as {
+          error?: { message?: string; code?: number } | string;
+          message?: string;
+        };
+        const e = err.error;
+        if (typeof e === "string") {
+          errorMessage = e;
+        } else if (e && typeof e === "object" && typeof e.message === "string") {
+          errorMessage = e.message;
+        } else if (typeof err.message === "string") {
+          errorMessage = err.message;
+        } else {
+          errorMessage = raw.slice(0, 400);
+        }
+      } catch {
+        errorMessage = raw.slice(0, 400);
+      }
+    }
+    return NextResponse.json({ error: errorMessage }, { status: 400 });
   }
 
   if (!upstream.ok) {
