@@ -216,17 +216,26 @@ export function useTokenBurner(parallelCount: number) {
     promptText: string
   ): { model: string; promptDelta: number; completionDelta: number; totalDelta: number } {
     const u = snap.usage
-    let pt = u?.prompt_tokens ?? u?.input_tokens ?? 0
-    let ct = u?.completion_tokens ?? u?.output_tokens ?? 0
-    let tt = u?.total_tokens ?? 0
+    let pt = Number(u?.prompt_tokens ?? u?.input_tokens ?? 0) || 0
+    let ct = Number(u?.completion_tokens ?? u?.output_tokens ?? 0) || 0
+    let tt = Number(u?.total_tokens ?? 0) || 0
     if (tt === 0 && (pt > 0 || ct > 0)) tt = pt + ct
     // Some providers only send total_tokens; without split, cost/impact (cost uses prompt+completion) stay at 0.
     if (tt > 0 && pt === 0 && ct === 0) {
       pt = Math.floor(tt / 2)
       ct = tt - pt
     }
-    if (tt === 0) {
-      const est = estimateTokensFromText(promptText, snap.text, snap.thought)
+
+    const est = estimateTokensFromText(promptText, snap.text, snap.thought)
+    const streamedChars = snap.text.length + snap.thought.length
+    // Custom / compat gateways often omit stream usage (400 on stream_options) or return totals
+    // below what was actually streamed (reasoning channels, broken aggregators).
+    const estClearlyHigher =
+      streamedChars >= 400 &&
+      tt > 0 &&
+      (est.total_tokens > tt * 1.12 || est.total_tokens > tt + 2_000)
+
+    if (tt === 0 || estClearlyHigher) {
       pt = est.prompt_tokens
       ct = est.completion_tokens
       tt = est.total_tokens

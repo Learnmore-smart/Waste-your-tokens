@@ -150,12 +150,28 @@ export async function consumeOpenAiSse(
   return { text: acc.s, thought: acc.t, usage, model }
 }
 
+/** UTF-8 byte length — better than code units for CJK-ish token-ish heuristics. */
+function utf8ByteLength(s: string): number {
+  if (!s) return 0
+  return new TextEncoder().encode(s).length
+}
+
+/**
+ * When the stream has no `usage` (common after providers 400-reject `stream_options`)
+ * or totals are bogus, this bounds tokens from text. Biased slightly high vs pure-English
+ * /4 rules so CJK / mixed content and custom gateways under-report less.
+ */
 export function estimateTokensFromText(prompt: string, completion: string, thought: string): {
   prompt_tokens: number
   completion_tokens: number
   total_tokens: number
 } {
-  const promptT = Math.max(1, Math.ceil(prompt.length / 4))
-  const outT = Math.max(1, Math.ceil((completion.length + thought.length) / 3.5))
+  const promptT = Math.max(
+    1,
+    Math.ceil(Math.max(prompt.length / 4, utf8ByteLength(prompt) / 3))
+  )
+  const out = completion.length + thought.length
+  const outBytes = utf8ByteLength(completion + thought)
+  const outT = Math.max(1, Math.ceil(Math.max(out / 3, outBytes / 3)))
   return { prompt_tokens: promptT, completion_tokens: outT, total_tokens: promptT + outT }
 }
