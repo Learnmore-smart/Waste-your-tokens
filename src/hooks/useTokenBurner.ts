@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useCallback, useRef, useEffect } from 'react'
+import { toast } from 'sonner'
 import { tokensToCost, tokensToCarbonGrams, carbonToMiles, carbonToTrees } from '@/lib/conversions'
 import { getRandomPrompt } from '@/lib/promptPool'
 import { decryptApiKey, isEncrypted } from '@/lib/crypto'
@@ -470,9 +471,11 @@ export function useTokenBurner(duoMode: boolean) {
             backoffAttempt += 1
             const extra = Math.min(30_000, 800 * 2 ** Math.min(backoffAttempt, 6))
             const wait = outcome.delayMs + extra
-            setError(
-              `${outcome.message} — ${backoffAttempt > 0 ? 'Will retry' : 'Retrying'} in ${(wait / 1000).toFixed(1)}s (agent loop, click Stop to end).`
-            )
+            const line = `${outcome.message} — ${backoffAttempt > 0 ? 'Will retry' : 'Retrying'} in ${(wait / 1000).toFixed(1)}s (agent loop, click Stop to end).`
+            setError(null)
+            toast.warning(line, {
+              duration: Math.min(30_000, wait + 4_000),
+            })
             if (!loopActiveRef.current) break
             await sleep(wait)
             if (!loopActiveRef.current) break
@@ -489,9 +492,11 @@ export function useTokenBurner(duoMode: boolean) {
           setAwaiting(duoMode ? { mode: 'duo', a: false, b: false } : { mode: 'single', v: false })
           backoffAttempt += 1
           const wait = Math.min(20_000, 1500 * 2 ** Math.min(backoffAttempt, 5))
-          setError(
-            `${err instanceof Error ? err.message : 'Network error'} — Retrying in ${(wait / 1000).toFixed(1)}s…`
-          )
+          const line = `${err instanceof Error ? err.message : 'Network error'} — Retrying in ${(wait / 1000).toFixed(1)}s…`
+          setError(null)
+          toast.warning(line, {
+            duration: Math.min(25_000, wait + 3_000),
+          })
           await sleep(wait)
         }
       }

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Outfit, JetBrains_Mono } from "next/font/google";
+import { AppToaster } from "@/components/AppToaster";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import { I18nProvider } from "@/i18n/LanguageContext";
 import "./globals.css";
@@ -37,6 +38,7 @@ export default function RootLayout({
           <ErrorBoundary>
             {children}
           </ErrorBoundary>
+          <AppToaster />
         </I18nProvider>
       </body>
     </html>
