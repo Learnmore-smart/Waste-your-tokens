@@ -19,7 +19,6 @@ import BurningAtmosphere from '@/components/BurningAtmosphere'
 type TabId = 'burn' | 'settings'
 
 function StreamOutputPanel({
-  thought,
   text,
   active,
   awaiting,
@@ -27,7 +26,6 @@ function StreamOutputPanel({
   onDownload,
   titleOverride,
 }: {
-  thought: string
   text: string
   active: boolean
   awaiting: boolean
@@ -41,7 +39,7 @@ function StreamOutputPanel({
   const scrollRafRef = useRef<number | null>(null)
   /** When false, user has scrolled up — do not yank the viewport on each chunk. */
   const stickToBottomRef = useRef(true)
-  const hasContent = thought.length > 0 || text.length > 0
+  const hasContent = text.length > 0
 
   const nearBottomPx = 80
   const updateStickFromScroll = useCallback(() => {
@@ -66,13 +64,7 @@ function StreamOutputPanel({
     return () => {
       if (scrollRafRef.current != null) cancelAnimationFrame(scrollRafRef.current)
     }
-  }, [thought, text, active, awaiting])
-
-  const thoughtLine = thought
-    ? thought
-    : active && !awaiting && !text
-      ? '…'
-      : '—'
+  }, [text, active, awaiting])
 
   return (
     <div
@@ -121,36 +113,23 @@ function StreamOutputPanel({
             </span>
           </div>
         )}
-        <div className="flex flex-col min-h-0 flex-1 divide-y divide-border/50 [contain:layout]">
-          <div className="px-3 py-2.5 shrink-0 min-h-0">
-            <div className="text-[11px] font-medium text-text-tertiary/90 tracking-wide uppercase mb-1.5">
-              {t('stream.thought')}
-            </div>
-            <pre className="m-0 text-sm text-text-secondary/90 font-mono whitespace-pre-wrap break-words">
-              {thoughtLine}
-            </pre>
-          </div>
-          <div className="px-3 py-2.5 flex-1 min-h-[5rem] min-w-0">
-            <div className="text-[11px] font-medium text-text-tertiary/90 tracking-wide uppercase mb-1.5">
-              {t('stream.reply')}
-            </div>
-            {text ? (
-              active ? (
-                <pre className="m-0 min-w-0 whitespace-pre-wrap break-words text-[13px] leading-relaxed text-foreground/95">
-                  {text}
-                </pre>
-              ) : (
-                <StreamLatexContent
-                  className="min-w-0 whitespace-pre-wrap break-words text-[13px] leading-relaxed [&_.katex]:text-[1em] [&_.katex]:text-foreground/95 [&_.katex-d-block]:text-center"
-                  text={text}
-                />
-              )
+        <div className="flex flex-col min-h-0 flex-1 px-3 py-2.5 min-w-0 [contain:layout]">
+          {text ? (
+            active ? (
+              <pre className="m-0 min-w-0 whitespace-pre-wrap break-words text-[13px] leading-relaxed text-foreground/95">
+                {text}
+              </pre>
             ) : (
-              <div className="font-mono text-sm text-foreground/55">
-                {active && !awaiting ? '…' : '—'}
-              </div>
-            )}
-          </div>
+              <StreamLatexContent
+                className="min-w-0 whitespace-pre-wrap break-words text-[13px] leading-relaxed [&_.katex]:text-[1em] [&_.katex]:text-foreground/95 [&_.katex-d-block]:text-center"
+                text={text}
+              />
+            )
+          ) : (
+            <div className="font-mono text-sm text-foreground/55">
+              {active && !awaiting ? '…' : '—'}
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -194,7 +173,6 @@ export default function Home() {
     isBurning,
     error,
     streamText,
-    streamThought,
     streamDuo,
     isAwaitingStream,
     isAwaitingDuo,
@@ -209,38 +187,21 @@ export default function Home() {
   const { t, locale } = useI18n()
 
   const handleDownloadStream = useCallback(() => {
-    if (!streamText && !streamThought) return
-    const lines = [
-      `=== ${t('stream.thought')} ===`,
-      streamThought || '—',
-      '',
-      `=== ${t('stream.reply')} ===`,
-      streamText || '—',
-      '',
-    ]
-    const blob = new Blob([lines.join('\n')], { type: 'text/plain;charset=utf-8' })
+    if (!streamText) return
+    const blob = new Blob([streamText], { type: 'text/plain;charset=utf-8' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
     a.download = `waste-tokens-stream-${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.txt`
     a.click()
     URL.revokeObjectURL(url)
-  }, [streamText, streamThought, t])
+  }, [streamText])
 
   const handleDownloadDuoSlot = useCallback(
     (slot: 0 | 1) => {
       const s = streamDuo[slot]
-      if (!s.text && !s.thought) return
-      const label = slot === 0 ? t('duo.agentA') : t('duo.agentB')
-      const lines = [
-        `=== ${label} — ${t('stream.thought')} ===`,
-        s.thought || '—',
-        '',
-        `=== ${label} — ${t('stream.reply')} ===`,
-        s.text || '—',
-        '',
-      ]
-      const blob = new Blob([lines.join('\n')], { type: 'text/plain;charset=utf-8' })
+      if (!s.text) return
+      const blob = new Blob([s.text], { type: 'text/plain;charset=utf-8' })
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
@@ -248,7 +209,7 @@ export default function Home() {
       a.click()
       URL.revokeObjectURL(url)
     },
-    [streamDuo, t]
+    [streamDuo]
   )
 
   const TABS: { id: TabId; label: string }[] = [
@@ -451,7 +412,6 @@ export default function Home() {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full">
                       <StreamOutputPanel
                         titleOverride={t('duo.panelA')}
-                        thought={streamDuo[0].thought}
                         text={streamDuo[0].text}
                         active={isBurning}
                         awaiting={isAwaitingDuo?.[0] ?? false}
@@ -460,7 +420,6 @@ export default function Home() {
                       />
                       <StreamOutputPanel
                         titleOverride={t('duo.panelB')}
-                        thought={streamDuo[1].thought}
                         text={streamDuo[1].text}
                         active={isBurning}
                         awaiting={isAwaitingDuo?.[1] ?? false}
@@ -470,7 +429,6 @@ export default function Home() {
                     </div>
                   ) : (
                     <StreamOutputPanel
-                      thought={streamThought}
                       text={streamText}
                       active={isBurning}
                       awaiting={isAwaitingStream}
