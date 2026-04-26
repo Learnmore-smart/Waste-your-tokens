@@ -19,12 +19,16 @@
   "duo": {
     "solo": "Solo",
     "duo": "Duo",
-    "aria": "Switch between Solo and Duo",
-    "caption": "Duo: two parallel streams, two random prompts per cycle (default is Solo, one stream). Toggle off while not burning.",
+    "squad": "Squad",
+    "aria": "Choose parallel mode: one stream, two, or a squad of up to ten",
+    "caption": "Duo: two parallel streams per round. Use Squad for more agents (3–10). Change mode while not burning.",
     "panelA": "Duo I",
     "panelB": "Duo II",
     "agentA": "Duo I",
-    "agentB": "Duo II"
+    "agentB": "Duo II",
+    "agent": "Agent",
+    "squadStepper": "Squad size",
+    "squadMax": "Max"
   },
   "homeStats": {
     "tokens": "Total tokens (session)",
@@ -39,7 +43,8 @@
     "caption": "OpenAI-style streaming. Random prompts; rounds run until you click Stop. LaTeX in output: $$...$$, \\[...\\], or \\(...\\). Token counts from usage or a length estimate. Transient errors are retried. Reasoning and output stay cached locally; a new request does not clear them until the first token arrives. Only “Clear” removes them. Refreshed content persists.",
     "reset": "Clear",
     "download": "Download",
-    "captionDuo": "Duo: two API streams in parallel (two random prompts per cycle). Stopping applies to both. Each panel can download its own output. Caching, LaTeX, and retries are the same as solo."
+    "captionDuo": "Duo: two API streams in parallel (two random prompts per cycle). Stopping applies to both. Each panel can download its own output. Caching, LaTeX, and retries are the same as solo.",
+    "captionSquadN": "Squad ({{n}}): parallel API streams, one random prompt per agent. Stop ends every stream. Caching, LaTeX, and retries match solo."
   },
   "burnButton": {
     "idle": "Start burning",

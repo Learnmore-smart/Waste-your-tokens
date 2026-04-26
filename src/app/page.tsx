@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useEffect, useRef, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { useTokenBurner } from '@/hooks/useTokenBurner'
+import { useTokenBurner, MAX_PARALLEL_AGENTS } from '@/hooks/useTokenBurner'
 import { useSettings } from '@/hooks/useSettings'
 import { useBurnSounds } from '@/hooks/useBurnSounds'
 import { useI18n } from '@/i18n/LanguageContext'
@@ -25,6 +25,7 @@ function StreamOutputPanel({
   onReset,
   onDownload,
   titleOverride,
+  compact = false,
 }: {
   text: string
   active: boolean
@@ -33,6 +34,8 @@ function StreamOutputPanel({
   onDownload: () => void
   /** When set, replaces the default “Stream” label (e.g. Agent A / B in Duo). */
   titleOverride?: string
+  /** Tighter max height for many parallel panels. */
+  compact?: boolean
 }) {
   const { t } = useI18n()
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -69,7 +72,10 @@ function StreamOutputPanel({
   return (
     <div
       className="w-full max-w-4xl border border-border rounded-xl bg-surface/90 backdrop-blur-sm overflow-hidden flex flex-col min-h-0"
-      style={{ minHeight: '220px', maxHeight: '38vh' }}
+      style={{
+        minHeight: compact ? 'min(200px, 24vh)' : '220px',
+        maxHeight: compact ? 'min(280px, 24vh)' : '38vh',
+      }}
     >
       <div className="px-3 py-2 border-b border-border flex items-center justify-between gap-2 shrink-0 min-h-10">
         <span className="text-xs font-medium text-text-tertiary tracking-wide">
@@ -136,32 +142,74 @@ function StreamOutputPanel({
   )
 }
 
-const DUO_MODE_KEY = 'waste-tokens-duo-mode'
+const PARALLEL_PRESET_KEY = 'waste-tokens-parallel-preset'
+const LEGACY_DUO_KEY = 'waste-tokens-duo-mode'
+const SQUAD_MIN = 3
+const DEFAULT_SQUAD_N = 6
 
-function loadDuoFromStorage(): boolean {
-  if (typeof window === 'undefined') return false
+type ParallelTier = 'solo' | 'duo' | 'squad'
+
+type ParallelPreset = { tier: ParallelTier; squadN: number }
+
+function clampSquadN(n: number) {
+  return Math.min(MAX_PARALLEL_AGENTS, Math.max(SQUAD_MIN, Math.floor(n)))
+}
+
+function loadParallelPreset(): ParallelPreset {
+  if (typeof window === 'undefined') return { tier: 'solo', squadN: DEFAULT_SQUAD_N }
   try {
-    return localStorage.getItem(DUO_MODE_KEY) === '1'
+    const raw = localStorage.getItem(PARALLEL_PRESET_KEY)
+    if (raw) {
+      const p = JSON.parse(raw) as { tier?: string; squadN?: number }
+      if (p.tier === 'solo' || p.tier === 'duo' || p.tier === 'squad') {
+        return {
+          tier: p.tier,
+          squadN: clampSquadN(typeof p.squadN === 'number' ? p.squadN : DEFAULT_SQUAD_N),
+        }
+      }
+    }
   } catch {
-    return false
+    // ignore
   }
+  try {
+    if (localStorage.getItem(LEGACY_DUO_KEY) === '1') {
+      return { tier: 'duo', squadN: DEFAULT_SQUAD_N }
+    }
+  } catch {
+    // ignore
+  }
+  return { tier: 'solo', squadN: DEFAULT_SQUAD_N }
+}
+
+function parallelCountFromPreset(p: ParallelPreset): number {
+  if (p.tier === 'solo') return 1
+  if (p.tier === 'duo') return 2
+  return p.squadN
 }
 
 export default function Home() {
-  const [duoMode, setDuoMode] = useState(false)
+  const [parallelPreset, setParallelPreset] = useState<ParallelPreset>({
+    tier: 'solo',
+    squadN: DEFAULT_SQUAD_N,
+  })
 
   useEffect(() => {
-    setDuoMode(loadDuoFromStorage())
+    setParallelPreset(loadParallelPreset())
   }, [])
 
-  const setDuoModePersist = useCallback((on: boolean) => {
-    setDuoMode(on)
+  const persistParallelPreset = useCallback((next: ParallelPreset) => {
+    setParallelPreset(next)
     try {
-      localStorage.setItem(DUO_MODE_KEY, on ? '1' : '0')
+      localStorage.setItem(PARALLEL_PRESET_KEY, JSON.stringify(next))
     } catch {
       // ignore
     }
   }, [])
+
+  const parallelCount = useMemo(
+    () => parallelCountFromPreset(parallelPreset),
+    [parallelPreset]
+  )
 
   const {
     totalTokens,
@@ -173,14 +221,14 @@ export default function Home() {
     isBurning,
     error,
     streamText,
-    streamDuo,
+    streamMulti,
     isAwaitingStream,
-    isAwaitingDuo,
+    isAwaitingParallel,
     resetStreamCache,
     startBurning,
     stopBurn,
     dismissError,
-  } = useTokenBurner(duoMode)
+  } = useTokenBurner(parallelCount)
 
   const { settings, isSettingsOpen, isKeyReady, closeSettings, saveSettings } = useSettings()
 
@@ -197,20 +245,26 @@ export default function Home() {
     URL.revokeObjectURL(url)
   }, [streamText])
 
-  const handleDownloadDuoSlot = useCallback(
-    (slot: 0 | 1) => {
-      const s = streamDuo[slot]
-      if (!s.text) return
+  const handleDownloadMultiSlot = useCallback(
+    (slot: number) => {
+      const s = streamMulti[slot]
+      if (!s?.text) return
       const blob = new Blob([s.text], { type: 'text/plain;charset=utf-8' })
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = `waste-tokens-${slot === 0 ? 'a' : 'b'}-${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.txt`
+      a.download = `waste-tokens-${slot + 1}-${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.txt`
       a.click()
       URL.revokeObjectURL(url)
     },
-    [streamDuo]
+    [streamMulti]
   )
+
+  const streamHelpText = useMemo(() => {
+    if (parallelCount === 1) return t('stream.caption')
+    if (parallelCount === 2) return t('stream.captionDuo')
+    return t('stream.captionSquadN').replace('{{n}}', String(parallelCount))
+  }, [parallelCount, t])
 
   const TABS: { id: TabId; label: string }[] = [
     { id: 'burn', label: t('tabs.burn') },
@@ -336,48 +390,108 @@ export default function Home() {
                 className="flex flex-col items-center gap-6"
               >
                 <div className="flex flex-col items-center gap-3 w-full max-w-4xl">
-                  <div className="flex items-center gap-3 select-none" role="group" aria-label={t('duo.aria')}>
-                    <span
-                      className={`text-xs font-semibold tracking-tight min-w-[2.5rem] text-right transition-colors ${
-                        !duoMode ? 'text-accent' : 'text-text-tertiary'
-                      }`}
+                  <div
+                    className="flex flex-col items-stretch gap-2 w-full max-w-md"
+                    role="group"
+                    aria-label={t('duo.aria')}
+                  >
+                    <div
+                      className="flex p-1 rounded-2xl border border-border/80 bg-surface/70 backdrop-blur-sm shadow-sm"
+                      style={{ boxShadow: 'inset 0 1px 0 0 oklch(0.5 0 0 / 0.06)' }}
                     >
-                      {t('duo.solo')}
-                    </span>
-                    <button
-                      type="button"
-                      role="switch"
-                      aria-label={t('duo.aria')}
-                      aria-checked={duoMode}
-                      disabled={isBurning}
-                      onClick={() => setDuoModePersist(!duoMode)}
-                      className={`
-                        relative inline-flex h-7 w-12 shrink-0 items-center rounded-full border transition-colors
-                        focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40
-                        ${isBurning ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
-                        ${
-                          duoMode
-                            ? 'bg-accent/25 border-accent/40'
-                            : 'bg-surface border-border hover:border-border-strong'
-                        }
-                      `}
-                    >
-                      <span
-                        className={`
-                          inline-block size-5 rounded-full bg-surface shadow-sm border border-border/80 transition-transform
-                          ${duoMode ? 'translate-x-5' : 'translate-x-1'}
-                        `}
-                      />
-                    </button>
-                    <span
-                      className={`text-xs font-semibold tracking-tight min-w-[2.5rem] transition-colors ${
-                        duoMode ? 'text-accent' : 'text-text-tertiary'
-                      }`}
-                    >
-                      {t('duo.duo')}
-                    </span>
+                      {(
+                        [
+                          { id: 'solo' as const, label: t('duo.solo') },
+                          { id: 'duo' as const, label: t('duo.duo') },
+                          { id: 'squad' as const, label: t('duo.squad') },
+                        ] as const
+                      ).map(({ id, label }) => {
+                        const active = parallelPreset.tier === id
+                        return (
+                          <button
+                            key={id}
+                            type="button"
+                            disabled={isBurning}
+                            onClick={() => persistParallelPreset({ ...parallelPreset, tier: id })}
+                            className={`
+                              relative flex-1 rounded-xl px-3 py-2 text-xs font-semibold tracking-tight transition-all
+                              focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/35
+                              ${isBurning ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
+                              ${
+                                active
+                                  ? 'text-accent bg-accent/[0.12] shadow-[0_1px_0_0_oklch(0.5_0_0/0.08)]'
+                                  : 'text-text-tertiary hover:text-text-secondary hover:bg-surface/80'
+                              }
+                            `}
+                          >
+                            {active && (
+                              <motion.span
+                                layoutId="parallel-mode-pill"
+                                className="absolute inset-0 rounded-xl border border-accent/25 bg-gradient-to-b from-accent/10 to-transparent pointer-events-none"
+                                transition={{ type: 'spring', stiffness: 500, damping: 38 }}
+                              />
+                            )}
+                            <span className="relative z-10">{label}</span>
+                          </button>
+                        )
+                      })}
+                    </div>
+                    {parallelPreset.tier === 'squad' && (
+                      <div className="flex items-center justify-center gap-3 px-1">
+                        <span className="text-[10px] uppercase tracking-wider text-text-tertiary font-medium">
+                          {t('duo.squadStepper')}
+                        </span>
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            disabled={isBurning || parallelPreset.squadN <= SQUAD_MIN}
+                            onClick={() =>
+                              persistParallelPreset({
+                                ...parallelPreset,
+                                squadN: clampSquadN(parallelPreset.squadN - 1),
+                              })
+                            }
+                            className="size-8 rounded-lg border border-border/90 bg-surface/90 text-sm font-semibold text-foreground/90 hover:border-accent/40 hover:bg-accent/5 transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                            aria-label="Decrease squad size"
+                          >
+                            −
+                          </button>
+                          <div className="min-w-[2.5rem] text-center font-mono text-sm font-semibold text-foreground tabular-nums">
+                            {parallelPreset.squadN}
+                            <span className="text-text-tertiary font-normal">/{MAX_PARALLEL_AGENTS}</span>
+                          </div>
+                          <button
+                            type="button"
+                            disabled={isBurning || parallelPreset.squadN >= MAX_PARALLEL_AGENTS}
+                            onClick={() =>
+                              persistParallelPreset({
+                                ...parallelPreset,
+                                squadN: clampSquadN(parallelPreset.squadN + 1),
+                              })
+                            }
+                            className="size-8 rounded-lg border border-border/90 bg-surface/90 text-sm font-semibold text-foreground/90 hover:border-accent/40 hover:bg-accent/5 transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                            aria-label="Increase squad size"
+                          >
+                            +
+                          </button>
+                          <button
+                            type="button"
+                            disabled={isBurning}
+                            onClick={() =>
+                              persistParallelPreset({
+                                ...parallelPreset,
+                                squadN: MAX_PARALLEL_AGENTS,
+                              })
+                            }
+                            className="ml-1 text-[10px] font-semibold tracking-wide text-accent/90 hover:underline cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed bg-transparent border-none px-1"
+                          >
+                            {t('duo.squadMax')}
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
-                  {duoMode && (
+                  {parallelCount > 1 && (
                     <p className="text-text-tertiary text-[11px] text-center max-w-xl leading-relaxed">
                       {t('duo.caption')}
                     </p>
@@ -405,27 +519,36 @@ export default function Home() {
                 )}
 
                 <div className="w-full max-w-6xl">
-                  <p className="text-text-tertiary text-xs text-center mb-2">
-                    {duoMode ? t('stream.captionDuo') : t('stream.caption')}
-                  </p>
-                  {duoMode ? (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full">
-                      <StreamOutputPanel
-                        titleOverride={t('duo.panelA')}
-                        text={streamDuo[0].text}
-                        active={isBurning}
-                        awaiting={isAwaitingDuo?.[0] ?? false}
-                        onReset={resetStreamCache}
-                        onDownload={() => handleDownloadDuoSlot(0)}
-                      />
-                      <StreamOutputPanel
-                        titleOverride={t('duo.panelB')}
-                        text={streamDuo[1].text}
-                        active={isBurning}
-                        awaiting={isAwaitingDuo?.[1] ?? false}
-                        onReset={resetStreamCache}
-                        onDownload={() => handleDownloadDuoSlot(1)}
-                      />
+                  <p className="text-text-tertiary text-xs text-center mb-2">{streamHelpText}</p>
+                  {parallelCount > 1 ? (
+                    <div
+                      className={`
+                        grid w-full gap-3
+                        ${parallelCount <= 2 ? 'grid-cols-1 md:grid-cols-2' : ''}
+                        ${
+                          parallelCount >= 3 && parallelCount <= 6
+                            ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3'
+                            : ''
+                        }
+                        ${
+                          parallelCount >= 7
+                            ? 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4'
+                            : ''
+                        }
+                      `}
+                    >
+                      {Array.from({ length: parallelCount }, (_, i) => (
+                        <StreamOutputPanel
+                          key={i}
+                          compact={parallelCount > 2}
+                          titleOverride={`${t('duo.agent')} ${i + 1}`}
+                          text={streamMulti[i]?.text ?? ''}
+                          active={isBurning}
+                          awaiting={isAwaitingParallel?.[i] ?? false}
+                          onReset={resetStreamCache}
+                          onDownload={() => handleDownloadMultiSlot(i)}
+                        />
+                      ))}
                     </div>
                   ) : (
                     <StreamOutputPanel

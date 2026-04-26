@@ -19,12 +19,16 @@
   "duo": {
     "solo": "Solo",
     "duo": "Duo",
-    "aria": "在 Solo 与 Duo 之间切换",
-    "caption": "Duo 为两路流并行、每轮两条随机提示；默认 Solo 为单路。非燃烧中可随时切回。",
+    "squad": "小队",
+    "aria": "并行模式：单路、双路，或 3–10 路小队",
+    "caption": "Duo 为两路并行；需要更多并发放「小队」为 3–10 路。非燃烧中可切换。",
     "panelA": "Duo I",
     "panelB": "Duo II",
     "agentA": "Duo I",
-    "agentB": "Duo II"
+    "agentB": "Duo II",
+    "agent": "代理",
+    "squadStepper": "小队规模",
+    "squadMax": "满"
   },
   "homeStats": {
     "tokens": "累计词元（本会话）",
@@ -39,7 +43,8 @@
     "caption": "OpenAI 兼容流式；提示词随机。每轮结束会自动开始下一轮，直到你点「停止」；短暂故障会自动重试。输出区支持 LaTeX 展示：用 $$...$$、\\[...\\] 或 \\(...\\)。词元数优先用上游 usage，否则按长度估算。推理与输出缓存在本机，新请求不会先清空，刷新后仍在；仅点「清空」会删除。",
     "reset": "清空",
     "download": "下载",
-    "captionDuo": "Duo：两路 API 流并行，每轮各用一条随机提示；停止时两路同时结束。每块面板可单独下载。缓存、LaTeX、重试与单人模式相同。"
+    "captionDuo": "Duo：两路 API 流并行，每轮各用一条随机提示；停止时两路同时结束。每块面板可单独下载。缓存、LaTeX、重试与单人模式相同。",
+    "captionSquadN": "小队（{{n}} 路）：多路流并行，每名代理每轮各一条随机提示；停止时全部结束。缓存、LaTeX、重试与 Solo 相同。"
   },
   "burnButton": {
     "idle": "开始燃烧",

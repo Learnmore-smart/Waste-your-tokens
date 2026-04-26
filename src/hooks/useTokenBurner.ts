@@ -20,53 +20,85 @@ export interface StreamCachePayload {
 
 const emptyStream = (): StreamCachePayload => ({ text: '', thought: '' })
 
-type StreamCacheV2 = { v: 2; single: StreamCachePayload; duo: [StreamCachePayload, StreamCachePayload] }
+/** Max concurrent burn-stream agents (parallel prompts per round). */
+export const MAX_PARALLEL_AGENTS = 10
+const MAX_PARALLEL = MAX_PARALLEL_AGENTS
+const emptyMulti = (): StreamCachePayload[] =>
+  Array.from({ length: MAX_PARALLEL }, () => emptyStream())
 
-function loadStreamCacheV2(): StreamCacheV2 {
+type StreamCacheV3 = { v: 3; single: StreamCachePayload; multi: StreamCachePayload[] }
+
+function parseSlot(o: unknown): StreamCachePayload {
+  if (!o || typeof o !== 'object') return emptyStream()
+  const r = o as Record<string, unknown>
+  return {
+    text: typeof r.text === 'string' ? r.text : '',
+    thought: typeof r.thought === 'string' ? r.thought : '',
+  }
+}
+
+function loadStreamCacheV3(): StreamCacheV3 {
   if (typeof window === 'undefined') {
-    return { v: 2, single: emptyStream(), duo: [emptyStream(), emptyStream()] }
+    return { v: 3, single: emptyStream(), multi: emptyMulti() }
   }
   try {
     const raw = localStorage.getItem(STREAM_CACHE_KEY)
-    if (!raw) return { v: 2, single: emptyStream(), duo: [emptyStream(), emptyStream()] }
+    if (!raw) return { v: 3, single: emptyStream(), multi: emptyMulti() }
     const p = JSON.parse(raw) as unknown
     if (!p || typeof p !== 'object') {
-      return { v: 2, single: emptyStream(), duo: [emptyStream(), emptyStream()] }
+      return { v: 3, single: emptyStream(), multi: emptyMulti() }
     }
     const o = p as Record<string, unknown>
-    if (o.v === 2 && o.single && o.duo && Array.isArray(o.duo) && o.duo.length === 2) {
+    if (o.v === 3 && o.single && Array.isArray(o.multi)) {
       const s = o.single as Record<string, unknown>
-      const a = o.duo[0] as Record<string, unknown>
-      const b = o.duo[1] as Record<string, unknown>
+      const arr = o.multi as unknown[]
+      const multi = emptyMulti()
+      for (let i = 0; i < Math.min(MAX_PARALLEL, arr.length); i++) {
+        multi[i] = parseSlot(arr[i])
+      }
       return {
-        v: 2,
+        v: 3,
         single: {
           text: typeof s.text === 'string' ? s.text : '',
           thought: typeof s.thought === 'string' ? s.thought : '',
         },
-        duo: [
-          {
-            text: typeof a.text === 'string' ? a.text : '',
-            thought: typeof a.thought === 'string' ? a.thought : '',
-          },
-          {
-            text: typeof b.text === 'string' ? b.text : '',
-            thought: typeof b.thought === 'string' ? b.thought : '',
-          },
-        ],
+        multi,
+      }
+    }
+    // v2: duo pair
+    if (o.v === 2 && o.single && o.duo && Array.isArray(o.duo) && o.duo.length === 2) {
+      const s = o.single as Record<string, unknown>
+      const a = o.duo[0] as Record<string, unknown>
+      const b = o.duo[1] as Record<string, unknown>
+      const multi = emptyMulti()
+      multi[0] = {
+        text: typeof a.text === 'string' ? a.text : '',
+        thought: typeof a.thought === 'string' ? a.thought : '',
+      }
+      multi[1] = {
+        text: typeof b.text === 'string' ? b.text : '',
+        thought: typeof b.thought === 'string' ? b.thought : '',
+      }
+      return {
+        v: 3,
+        single: {
+          text: typeof s.text === 'string' ? s.text : '',
+          thought: typeof s.thought === 'string' ? s.thought : '',
+        },
+        multi,
       }
     }
     // legacy v1: { text, thought }
     return {
-      v: 2,
+      v: 3,
       single: {
         text: typeof o.text === 'string' ? o.text : '',
         thought: typeof o.thought === 'string' ? o.thought : '',
       },
-      duo: [emptyStream(), emptyStream()],
+      multi: emptyMulti(),
     }
   } catch {
-    return { v: 2, single: emptyStream(), duo: [emptyStream(), emptyStream()] }
+    return { v: 3, single: emptyStream(), multi: emptyMulti() }
   }
 }
 
@@ -136,17 +168,16 @@ function persistMergedState(merged: BurnState) {
 
 type AwaitState =
   | { mode: 'single'; v: boolean }
-  | { mode: 'duo'; a: boolean; b: boolean }
+  | { mode: 'multi'; pending: boolean[] }
 
-export function useTokenBurner(duoMode: boolean) {
+export function useTokenBurner(parallelCount: number) {
+  const nParallel = Math.min(MAX_PARALLEL, Math.max(1, Math.floor(parallelCount)))
+
   const [state, setState] = useState<BurnState>(() => loadInitialState())
   const [isBurning, setIsBurning] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [stream, setStream] = useState<StreamCachePayload>(() => loadStreamCacheV2().single)
-  const [duoStream, setDuoStream] = useState<[StreamCachePayload, StreamCachePayload]>(() => {
-    const d = loadStreamCacheV2().duo
-    return d
-  })
+  const [stream, setStream] = useState<StreamCachePayload>(() => loadStreamCacheV3().single)
+  const [multiStream, setMultiStream] = useState<StreamCachePayload[]>(() => loadStreamCacheV3().multi)
   const [awaiting, setAwaiting] = useState<AwaitState>({ mode: 'single', v: false })
 
   const loopActiveRef = useRef(false)
@@ -158,20 +189,24 @@ export function useTokenBurner(duoMode: boolean) {
       localStorage.setItem(
         STREAM_CACHE_KEY,
         JSON.stringify({
-          v: 2,
+          v: 3,
           single: stream,
-          duo: duoStream,
-        } satisfies StreamCacheV2)
+          multi: multiStream,
+        } satisfies StreamCacheV3)
       )
     } catch {
       // ignore quota / private mode
     }
-  }, [stream, duoStream])
+  }, [stream, multiStream])
 
   useEffect(() => {
     if (isBurning) return
-    setAwaiting(duoMode ? { mode: 'duo', a: false, b: false } : { mode: 'single', v: false })
-  }, [duoMode, isBurning])
+    if (nParallel === 1) {
+      setAwaiting({ mode: 'single', v: false })
+    } else {
+      setAwaiting({ mode: 'multi', pending: Array(nParallel).fill(false) })
+    }
+  }, [nParallel, isBurning])
 
   /** Extracted token delta from one stream; shared by single + duo. */
   function usageFieldsFromSnapshot(
@@ -226,17 +261,17 @@ export function useTokenBurner(duoMode: boolean) {
     []
   )
 
-  /** One state update for 1–2 duo streams. Pricing model matches the old `apply` ×2 behavior (use slot B if present, else the only slot). */
-  const applyDuoPairUsageToState = useCallback(
-    (a: { model: string; snap: SseStreamSnapshot; promptText: string } | null, b: typeof a) => {
-      if (!a && !b) return
+  /** One state update for 2+ parallel streams. Price uses the last successful stream’s model. */
+  const applyMultiUsageToState = useCallback(
+    (items: ({ model: string; snap: SseStreamSnapshot; promptText: string } | null)[]) => {
+      const present = items.filter((x): x is NonNullable<typeof x> => x != null)
+      if (present.length === 0) return
       setState((prev) => {
         let totalTokens = prev.totalTokens
         let totalCalls = prev.totalCalls
         let promptTokens = prev.promptTokens
         let completionTokens = prev.completionTokens
-        for (const item of [a, b] as const) {
-          if (!item) continue
+        for (const item of present) {
           const m = item.snap.model || item.model
           const u = usageFieldsFromSnapshot(m, item.snap, item.promptText)
           totalTokens += u.totalDelta
@@ -244,8 +279,8 @@ export function useTokenBurner(duoMode: boolean) {
           promptTokens += u.promptDelta
           completionTokens += u.completionDelta
         }
-        const second = b ?? a!
-        const pricingModel = second.snap.model || second.model
+        const last = present[present.length - 1]!
+        const pricingModel = last.snap.model || last.model
         const newCost = tokensToCost(promptTokens, completionTokens, pricingModel)
         const newCarbon = tokensToCarbonGrams(totalTokens)
         const newDrivingKm = carbonToDrivingKm(newCarbon)
@@ -347,27 +382,25 @@ export function useTokenBurner(duoMode: boolean) {
     [applyUsageToState, readSettingsForRound]
   )
 
-  const runDuoStreamRound = useCallback(
-    async (signalA: AbortSignal, signalB: AbortSignal): Promise<RoundOutcome> => {
-      setAwaiting({ mode: 'duo', a: true, b: true })
+  const runParallelStreamRound = useCallback(
+    async (signals: AbortSignal[]): Promise<RoundOutcome> => {
+      const n = signals.length
+      if (n < 2) return { kind: 'ok' }
+      setAwaiting({ mode: 'multi', pending: Array(n).fill(true) })
 
       const built = await readSettingsForRound()
       if (!built.ok) {
-        setAwaiting({ mode: 'duo', a: false, b: false })
+        setAwaiting({ mode: 'multi', pending: Array(n).fill(false) })
         return { kind: 'fatal', message: built.message }
       }
       const { settings: s, model } = built
-      const prompt0 = getRandomPrompt()
-      const prompt1 = getRandomPrompt()
+      const prompts = Array.from({ length: n }, () => getRandomPrompt())
 
-      const doFetch = (
-        slot: 0 | 1,
-        prompt: string,
-        signal: AbortSignal
-      ): Promise<
-        | { kind: 'ok'; snap: Awaited<ReturnType<typeof consumeOpenAiSse>>; model: string; prompt: string }
-        | { kind: 'http'; res: Response }
-      > => {
+      type OkRow = { kind: 'ok'; snap: Awaited<ReturnType<typeof consumeOpenAiSse>>; model: string; prompt: string }
+      type HttpRow = { kind: 'http'; res: Response }
+      type Row = OkRow | HttpRow
+
+      const doFetch = (slot: number, prompt: string, signal: AbortSignal): Promise<Row> => {
         return (async () => {
           const res = await fetch(withBasePath('/api/burn-stream'), {
             method: 'POST',
@@ -387,13 +420,15 @@ export function useTokenBurner(duoMode: boolean) {
             res.body,
             (u) => {
               setAwaiting((prev) => {
-                if (prev.mode !== 'duo') return prev
-                if (slot === 0) return prev.a ? { ...prev, a: false } : prev
-                return prev.b ? { ...prev, b: false } : prev
+                if (prev.mode !== 'multi' || prev.pending.length !== n) return prev
+                if (!prev.pending[slot]) return prev
+                const nextP = [...prev.pending]
+                nextP[slot] = false
+                return { mode: 'multi', pending: nextP }
               })
-              setDuoStream((prev) => {
-                const next: [StreamCachePayload, StreamCachePayload] = [...prev]
-                next[slot] = { text: u.text, thought: u.thought }
+              setMultiStream((prev) => {
+                const next = [...prev]
+                if (slot < next.length) next[slot] = { text: u.text, thought: u.thought }
                 return next
               })
             },
@@ -403,10 +438,12 @@ export function useTokenBurner(duoMode: boolean) {
         })()
       }
 
-      const [r0, r1] = await Promise.all([doFetch(0, prompt0, signalA), doFetch(1, prompt1, signalB)])
+      const results = await Promise.all(
+        signals.map((sig, i) => doFetch(i, prompts[i]!, sig))
+      )
 
-      const handleHttp = async (r: { kind: 'http'; res: Response }) => {
-        setAwaiting({ mode: 'duo', a: false, b: false })
+      const handleHttp = async (r: HttpRow) => {
+        setAwaiting({ mode: 'multi', pending: Array(n).fill(false) })
         const errData = await r.res.json().catch(() => ({}))
         const msg =
           (errData as { error?: string }).error || `Request failed with status ${r.res.status}`
@@ -420,30 +457,25 @@ export function useTokenBurner(duoMode: boolean) {
         return { kind: 'retry' as const, message: msg, delayMs: 1_500 }
       }
 
-      const okPayload = (
-        r: (typeof r0) & { kind: 'ok' }
-      ): { model: string; snap: SseStreamSnapshot; promptText: string } => ({
+      const okPayload = (r: OkRow): { model: string; snap: SseStreamSnapshot; promptText: string } => ({
         model: r.model,
         snap: r.snap,
         promptText: r.prompt,
       })
 
-      applyDuoPairUsageToState(
-        r0.kind === 'ok' ? okPayload(r0) : null,
-        r1.kind === 'ok' ? okPayload(r1) : null
+      const payloads: (ReturnType<typeof okPayload> | null)[] = results.map((r) =>
+        r.kind === 'ok' ? okPayload(r) : null
       )
+      applyMultiUsageToState(payloads)
 
-      if (r0.kind === 'http') {
-        return handleHttp(r0)
-      }
-      if (r1.kind === 'http') {
-        return handleHttp(r1)
+      for (const r of results) {
+        if (r.kind === 'http') return handleHttp(r)
       }
 
-      setAwaiting({ mode: 'duo', a: false, b: false })
+      setAwaiting({ mode: 'multi', pending: Array(n).fill(false) })
       return { kind: 'ok' }
     },
-    [applyDuoPairUsageToState, readSettingsForRound]
+    [applyMultiUsageToState, readSettingsForRound]
   )
 
   const startBurning = useCallback(() => {
@@ -457,13 +489,15 @@ export function useTokenBurner(duoMode: boolean) {
     const run = async () => {
       let backoffAttempt = 0
       while (loopActiveRef.current) {
-        const a = new AbortController()
-        const b = new AbortController()
-        abortRef.current = duoMode ? [a, b] : [a]
+        const multi = nParallel > 1
+        const controllers = multi
+          ? Array.from({ length: nParallel }, () => new AbortController())
+          : [new AbortController()]
+        abortRef.current = controllers
         try {
-          const outcome = duoMode
-            ? await runDuoStreamRound(a.signal, b.signal)
-            : await runOneStreamRound(a.signal)
+          const outcome = multi
+            ? await runParallelStreamRound(controllers.map((c) => c.signal))
+            : await runOneStreamRound(controllers[0]!.signal)
           if (!loopActiveRef.current) break
           if (outcome.kind === 'fatal') {
             setError(outcome.message)
@@ -488,10 +522,18 @@ export function useTokenBurner(duoMode: boolean) {
           await sleep(350)
         } catch (err) {
           if (err instanceof Error && err.name === 'AbortError') {
-            setAwaiting(duoMode ? { mode: 'duo', a: false, b: false } : { mode: 'single', v: false })
+            setAwaiting(
+              nParallel > 1
+                ? { mode: 'multi', pending: Array(nParallel).fill(false) }
+                : { mode: 'single', v: false }
+            )
             break
           }
-          setAwaiting(duoMode ? { mode: 'duo', a: false, b: false } : { mode: 'single', v: false })
+          setAwaiting(
+            nParallel > 1
+              ? { mode: 'multi', pending: Array(nParallel).fill(false) }
+              : { mode: 'single', v: false }
+          )
           backoffAttempt += 1
           const wait = Math.min(20_000, 1500 * 2 ** Math.min(backoffAttempt, 5))
           const line = `${err instanceof Error ? err.message : 'Network error'} — Retrying in ${(wait / 1000).toFixed(1)}s…`
@@ -507,7 +549,7 @@ export function useTokenBurner(duoMode: boolean) {
       abortRef.current = []
     }
     void run()
-  }, [runOneStreamRound, runDuoStreamRound, duoMode])
+  }, [runOneStreamRound, runParallelStreamRound, nParallel])
 
   const stopBurn = useCallback(() => {
     loopActiveRef.current = false
@@ -515,9 +557,13 @@ export function useTokenBurner(duoMode: boolean) {
       c.abort()
     }
     abortRef.current = []
-    setAwaiting(duoMode ? { mode: 'duo', a: false, b: false } : { mode: 'single', v: false })
+    setAwaiting(
+      nParallel > 1
+        ? { mode: 'multi', pending: Array(nParallel).fill(false) }
+        : { mode: 'single', v: false }
+    )
     setIsBurning(false)
-  }, [duoMode])
+  }, [nParallel])
 
   const dismissError = useCallback(() => {
     setError(null)
@@ -525,7 +571,7 @@ export function useTokenBurner(duoMode: boolean) {
 
   const resetStreamCache = useCallback(() => {
     setStream(emptyStream())
-    setDuoStream([emptyStream(), emptyStream()])
+    setMultiStream(emptyMulti())
     if (typeof window === 'undefined') return
     try {
       localStorage.removeItem(STREAM_CACHE_KEY)
@@ -535,8 +581,8 @@ export function useTokenBurner(duoMode: boolean) {
   }, [])
 
   const isAwaitingStream = awaiting.mode === 'single' ? awaiting.v : false
-  const isAwaitingDuo: [boolean, boolean] | null =
-    awaiting.mode === 'duo' ? [awaiting.a, awaiting.b] : null
+  const isAwaitingParallel: boolean[] | null =
+    awaiting.mode === 'multi' ? awaiting.pending : null
 
   return {
     totalTokens: state.totalTokens,
@@ -551,9 +597,9 @@ export function useTokenBurner(duoMode: boolean) {
     error,
     streamText: stream.text,
     streamThought: stream.thought,
-    streamDuo: duoStream,
+    streamMulti: multiStream,
     isAwaitingStream,
-    isAwaitingDuo,
+    isAwaitingParallel,
     resetStreamCache,
     startBurning,
     stopBurn,
