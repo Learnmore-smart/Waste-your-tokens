@@ -39,10 +39,24 @@ function StreamOutputPanel({
   const { t } = useI18n()
   const scrollRef = useRef<HTMLDivElement>(null)
   const scrollRafRef = useRef<number | null>(null)
+  /** When false, user has scrolled up — do not yank the viewport on each chunk. */
+  const stickToBottomRef = useRef(true)
   const hasContent = thought.length > 0 || text.length > 0
 
+  const nearBottomPx = 80
+  const updateStickFromScroll = useCallback(() => {
+    const el = scrollRef.current
+    if (!el) return
+    const slack = el.scrollHeight - el.scrollTop - el.clientHeight
+    stickToBottomRef.current = slack <= nearBottomPx
+  }, [])
+
   useEffect(() => {
-    if (!active || !scrollRef.current) return
+    if (!active) stickToBottomRef.current = true
+  }, [active])
+
+  useEffect(() => {
+    if (!active || !stickToBottomRef.current || !scrollRef.current) return
     if (scrollRafRef.current != null) cancelAnimationFrame(scrollRafRef.current)
     scrollRafRef.current = requestAnimationFrame(() => {
       scrollRafRef.current = null
@@ -89,7 +103,8 @@ function StreamOutputPanel({
       </div>
       <div
         ref={scrollRef}
-        className="overflow-y-auto flex-1 min-h-0 flex flex-col"
+        onScroll={updateStickFromScroll}
+        className="overflow-y-auto flex-1 min-h-0 flex flex-col overscroll-y-contain touch-pan-y"
       >
         {awaiting && (
           <div
