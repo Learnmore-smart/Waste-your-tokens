@@ -2,28 +2,59 @@
 
 import { useState, useCallback, useEffect } from 'react'
 import { encryptApiKey, decryptApiKey, isEncrypted } from '@/lib/crypto'
+import { THINKING_LEVELS, type ThinkingLevel } from '@/lib/thinkingLevel'
+
+export type { ThinkingLevel }
 
 export interface Settings {
   apiKey: string
   model: string
   baseUrl: string
   customModel: string
-  maxTokens: number
+  thinkingLevel: ThinkingLevel
   temperature: number
-  thinkingBudget: number
   prompt: string
+  /** Stable dropdown; Base URL still wins for matching. */
+  selectedProvider?: string
 }
 
 const STORAGE_KEY = 'waste-tokens-settings'
 const DEFAULT_SETTINGS: Settings = {
   apiKey: '',
   model: 'gpt-5.4',
-  baseUrl: 'https://api.openai.com',
+  baseUrl: 'https://api.openai.com/v1',
   customModel: '',
-  maxTokens: 4096,
+  thinkingLevel: 'off',
   temperature: 1.0,
-  thinkingBudget: 0,
   prompt: '',
+  selectedProvider: '',
+}
+
+function migrateToThinkingLevel(parsed: Record<string, unknown>): ThinkingLevel {
+  if (
+    typeof parsed.thinkingLevel === 'string' &&
+    (THINKING_LEVELS as readonly string[]).includes(parsed.thinkingLevel)
+  ) {
+    return parsed.thinkingLevel as ThinkingLevel
+  }
+  const b = parsed.thinkingBudget
+  if (typeof b === 'number') {
+    if (b <= 0) return 'off'
+    if (b < 12_000) return 'high'
+    if (b < 50_000) return 'xhigh'
+    return 'max'
+  }
+  return 'off'
+}
+
+/** Normalizes raw localStorage JSON (handles legacy `maxTokens` / `thinkingBudget`). */
+export function normalizeStoredSettings(parsed: Record<string, unknown>): Settings {
+  const { maxTokens: _a, thinkingBudget: _b, ...rest } = parsed
+  return {
+    ...DEFAULT_SETTINGS,
+    ...rest,
+    thinkingLevel: migrateToThinkingLevel({ ...DEFAULT_SETTINGS, ...parsed }),
+  } as Settings
 }
 
 function loadRawSettings(): Settings {
@@ -31,8 +62,8 @@ function loadRawSettings(): Settings {
   try {
     const stored = localStorage.getItem(STORAGE_KEY)
     if (stored) {
-      const parsed: Partial<Settings> = JSON.parse(stored)
-      return { ...DEFAULT_SETTINGS, ...parsed }
+      const parsed: Record<string, unknown> = JSON.parse(stored)
+      return normalizeStoredSettings(parsed)
     }
   } catch {}
   return DEFAULT_SETTINGS
@@ -87,10 +118,10 @@ export function useSettings() {
     try {
       const stored = localStorage.getItem(STORAGE_KEY)
       if (stored) {
-        const parsed: Partial<Settings> = JSON.parse(stored)
-        const apiKey: string = parsed.apiKey || ''
+        const parsed: Record<string, unknown> = JSON.parse(stored)
+        const apiKey: string = (parsed.apiKey as string) || ''
         const decryptedApiKey = isEncrypted(apiKey) ? await decryptApiKey(apiKey) : apiKey
-        return { ...DEFAULT_SETTINGS, ...parsed, apiKey: decryptedApiKey }
+        return { ...normalizeStoredSettings(parsed), apiKey: decryptedApiKey }
       }
     } catch {}
     return DEFAULT_SETTINGS

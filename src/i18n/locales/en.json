@@ -14,16 +14,36 @@
     "calls": "calls"
   },
   "burn": {
-    "autoBurn": "Auto Burn",
-    "interval": "Interval",
-    "dismiss": "Dismiss",
-    "reset": "Reset",
-    "export": "Export"
+    "dismiss": "Dismiss"
+  },
+  "duo": {
+    "solo": "Solo",
+    "duo": "Duo",
+    "aria": "Switch between Solo and Duo",
+    "caption": "Duo: two parallel streams, two random prompts per cycle (default is Solo, one stream). Toggle off while not burning.",
+    "panelA": "Duo I",
+    "panelB": "Duo II",
+    "agentA": "Duo I",
+    "agentB": "Duo II"
+  },
+  "homeStats": {
+    "tokens": "Total tokens (session)",
+    "calls": "API rounds",
+    "cost": "Est. cost (USD)"
+  },
+  "stream": {
+    "title": "Stream",
+    "thought": "Model reasoning",
+    "reply": "Output",
+    "awaiting": "Connecting…",
+    "caption": "OpenAI-style streaming. Random prompts; rounds run until you click Stop. LaTeX in output: $$...$$, \\[...\\], or \\(...\\). Token counts from usage or a length estimate. Transient errors are retried. Reasoning and output stay cached locally; a new request does not clear them until the first token arrives. Only “Clear” removes them. Refreshed content persists.",
+    "reset": "Clear",
+    "download": "Download",
+    "captionDuo": "Duo: two API streams in parallel (two random prompts per cycle). Stopping applies to both. Each panel can download its own output. Caching, LaTeX, and retries are the same as solo."
   },
   "burnButton": {
-    "idle": "Burn Tokens",
+    "idle": "Start burning",
     "burning": "Stop",
-    "autoBurning": "Stop",
     "error": "Retry"
   },
   "impact": {
@@ -82,10 +102,17 @@
     "customModelOption": "Custom…",
     "customModelPlaceholder": "Enter custom model name",
     "baseUrl": "Base URL",
-    "baseUrlHint": "Must be an OpenAI-compatible API endpoint. Trailing slashes are auto-removed.",
-    "maxTokens": "Max Tokens",
-    "thinkingBudget": "Thinking Budget",
-    "thinkingBudgetHint": ">0 for reasoning models. 0 = disabled.",
+    "baseUrlPlaceholder": "https://api.openai.com/v1",
+    "baseUrlHint": "OpenAI-Chat-Completions base URL — the same as the OpenAI SDK `baseURL` (everything before `/chat/completions`). Trailing slashes are auto-removed.",
+    "thinking": "Reasoning / thinking",
+    "thinkingHint": "Intensity is mapped per provider (OpenAI, Gemini, Anthropic, etc.). o-series models always use max completion only.",
+    "thinkingLevel": {
+      "off": "Off",
+      "high": "High",
+      "xhigh": "Extra high",
+      "max": "Max"
+    },
+    "maxOutputNote": "Max completion tokens are always set to the highest allowed (up to 128k) to maximize burn — this is not configurable.",
     "temperature": "Temperature",
     "precise": "Precise (0)",
     "creative": "Creative (2)",
@@ -94,5 +121,23 @@
   "languageToggle": {
     "en": "EN",
     "zh": "中文"
+  },
+  "legal": {
+    "disclaimer": "Waste Your Tokens is provided for entertainment only. You use this site and any API keys at your own risk. We are not responsible for any charges, overages, data loss, account restrictions, or other damages from burning tokens, misconfigured settings, or third-party API policies. By using the site, you agree that the operators and contributors have no liability to you. Nothing here is legal or financial advice."
+  },
+  "errorBoundary": {
+    "badge": "Error",
+    "title": "Something went wrong",
+    "description": "The app hit an unexpected error. Try reloading — your settings stay on this device.",
+    "retry": "Reload page",
+    "home": "Back home",
+    "detailLabel": "Details"
+  },
+  "notFound": {
+    "code": "404",
+    "title": "Page not found",
+    "description": "This path doesn’t exist — no tokens to burn here.",
+    "home": "Back home",
+    "hint": "Check the URL, or return to the app to keep streaming."
   }
 }

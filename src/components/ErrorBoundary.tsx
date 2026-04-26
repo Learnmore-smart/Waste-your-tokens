@@ -1,6 +1,7 @@
 'use client'
 
 import { Component, type ReactNode } from 'react'
+import ErrorFallback from '@/components/ErrorFallback'
 
 interface ErrorBoundaryProps {
   children: ReactNode
@@ -21,26 +22,18 @@ export default class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBo
     return { hasError: true, error }
   }
 
+  componentDidCatch(error: Error, info: { componentStack: string }) {
+    console.error('ErrorBoundary:', error, info.componentStack)
+  }
+
+  private handleRetry = () => {
+    this.setState({ hasError: false, error: null })
+    window.location.reload()
+  }
+
   render() {
     if (this.state.hasError) {
-      return (
-        <div className="min-h-screen flex flex-col items-center justify-center bg-zinc-950 text-white p-8 gap-6">
-          <h1 className="text-4xl font-bold text-red-500">Something went wrong</h1>
-          <p className="text-zinc-400 text-sm max-w-md text-center">
-            {this.state.error?.message || 'An unexpected error occurred.'}
-          </p>
-          <button
-            onClick={() => {
-              this.setState({ hasError: false, error: null })
-              window.location.reload()
-            }}
-            className="px-6 py-3 rounded-lg font-bold text-white text-sm uppercase tracking-wider cursor-pointer border-none"
-            style={{ background: 'linear-gradient(135deg, #f97316, #dc2626)' }}
-          >
-            Reload Page
-          </button>
-        </div>
-      )
+      return <ErrorFallback error={this.state.error} onRetry={this.handleRetry} />
     }
 
     return this.props.children

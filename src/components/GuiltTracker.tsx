@@ -8,6 +8,7 @@ import {
   carbonToSearches,
   carbonToStreamingHours,
 } from '@/lib/conversions'
+import { decimalsForMagnitude } from '@/lib/impactFormat'
 
 interface GuiltTrackerProps {
   carbonGrams: number
@@ -40,6 +41,16 @@ export default function GuiltTracker({ carbonGrams, milesDriven, treesNeeded }: 
   const googleSearches = carbonToSearches(carbonGrams)
   const streamingHours = carbonToStreamingHours(carbonGrams)
 
+  const dMiles =
+    milesDriven === 0 ? 0 : Math.max(2, decimalsForMagnitude(milesDriven, 4))
+  const dTrees = treesNeeded === 0 ? 0 : decimalsForMagnitude(treesNeeded, 5)
+  const dPhones =
+    smartphonesCharged === 0
+      ? 0
+      : Math.max(1, Math.min(2, decimalsForMagnitude(smartphonesCharged, 2)))
+  const dStream =
+    streamingHours === 0 ? 0 : Math.max(1, decimalsForMagnitude(streamingHours, 2))
+
   const cards: ImpactCard[] = [
     {
       labelKey: 'impact.carbonFootprint.label',
@@ -56,7 +67,7 @@ export default function GuiltTracker({ carbonGrams, milesDriven, treesNeeded }: 
     {
       labelKey: 'impact.milesDriven.label',
       value: milesDriven,
-      decimals: 1,
+      decimals: dMiles,
       suffixKey: 'impact.milesDriven.suffix',
       detailKey: 'impact.milesDriven.detail',
       gradient: 'linear-gradient(to top, rgba(55,50,45,0.4) 0%, rgba(55,50,45,0.1) 40%, transparent 70%)',
@@ -68,7 +79,7 @@ export default function GuiltTracker({ carbonGrams, milesDriven, treesNeeded }: 
     {
       labelKey: 'impact.treesToOffset.label',
       value: treesNeeded,
-      decimals: 2,
+      decimals: dTrees,
       suffixKey: 'impact.treesToOffset.suffix',
       detailKey: 'impact.treesToOffset.detail',
       gradient: 'linear-gradient(135deg, rgba(34,139,34,0.22) 0%, rgba(34,139,34,0.06) 45%, transparent 75%)',
@@ -80,7 +91,7 @@ export default function GuiltTracker({ carbonGrams, milesDriven, treesNeeded }: 
     {
       labelKey: 'impact.smartphonesCharged.label',
       value: smartphonesCharged,
-      decimals: 0,
+      decimals: dPhones,
       suffixKey: 'impact.smartphonesCharged.suffix',
       detailKey: 'impact.smartphonesCharged.detail',
       gradient: 'radial-gradient(ellipse at 0% 100%, rgba(0,188,188,0.25) 0%, rgba(0,188,188,0.06) 40%, transparent 70%)',
@@ -104,7 +115,7 @@ export default function GuiltTracker({ carbonGrams, milesDriven, treesNeeded }: 
     {
       labelKey: 'impact.streamingHours.label',
       value: streamingHours,
-      decimals: 1,
+      decimals: dStream,
       suffixKey: 'impact.streamingHours.suffix',
       detailKey: 'impact.streamingHours.detail',
       gradient: 'radial-gradient(ellipse at 50% 50%, rgba(90,90,210,0.22) 0%, rgba(90,90,210,0.05) 45%, transparent 75%)',

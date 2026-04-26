@@ -3,6 +3,13 @@
 import { useState } from 'react'
 import type { Settings } from '@/hooks/useSettings'
 import { useI18n } from '@/i18n/LanguageContext'
+import {
+  PROVIDER_PRESETS,
+  findProviderIdByBaseUrl,
+  resolveInitialProviderId,
+} from '@/config/providers'
+import { THINKING_LEVELS, type ThinkingLevel } from '@/lib/thinkingLevel'
+import SmoothSelect from '@/components/SmoothSelect'
 
 interface SettingsSidebarProps {
   isOpen: boolean
@@ -11,102 +18,27 @@ interface SettingsSidebarProps {
   onSave: (settings: Settings) => void
 }
 
-interface ProviderPreset {
-  id: string
-  label: string
-  baseUrl: string
-  models: string[]
+const CUSTOM_MODEL_CACHE_KEY = 'waste-tokens-custom-model-cache'
+
+function loadCustomModelCache(): Record<string, string> {
+  if (typeof window === 'undefined') return {}
+  try {
+    const stored = localStorage.getItem(CUSTOM_MODEL_CACHE_KEY)
+    if (stored) return JSON.parse(stored)
+  } catch {}
+  return {}
 }
 
-const PROVIDER_PRESETS: ProviderPreset[] = [
-  {
-    id: 'openai',
-    label: 'OpenAI',
-    baseUrl: 'https://api.openai.com',
-    models: ['gpt-5.5', 'gpt-5.4', 'gpt-5.4-mini', 'gpt-5.4-nano', 'gpt-5.2', 'gpt-5', 'gpt-5-mini', 'o3', 'o4-mini'],
-  },
-  {
-    id: 'anthropic',
-    label: 'Anthropic',
-    baseUrl: 'https://api.anthropic.com',
-    models: ['claude-opus-4-7', 'claude-opus-4-6', 'claude-sonnet-4-6', 'claude-haiku-4-5-20251001'],
-  },
-  {
-    id: 'google',
-    label: 'Google Gemini',
-    baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai',
-    models: ['gemini-3.1-pro-preview', 'gemini-3-flash-preview', 'gemini-3.1-flash-lite-preview', 'gemini-2.5-pro', 'gemini-2.5-flash'],
-  },
-  {
-    id: 'deepseek',
-    label: 'DeepSeek',
-    baseUrl: 'https://api.deepseek.com',
-    models: ['deepseek-v4-pro', 'deepseek-v4-flash', 'deepseek-chat', 'deepseek-reasoner'],
-  },
-  {
-    id: 'xai',
-    label: 'xAI',
-    baseUrl: 'https://api.x.ai',
-    models: ['grok-4.20', 'grok-4.20-multi-agent', 'grok-4.1-fast', 'grok-4', 'grok-3'],
-  },
-  {
-    id: 'mistral',
-    label: 'Mistral',
-    baseUrl: 'https://api.mistral.ai',
-    models: ['mistral-large-latest', 'devstral-latest', 'codestral-latest', 'mistral-small-latest', 'ministral-8b-latest'],
-  },
-  {
-    id: 'groq',
-    label: 'Groq',
-    baseUrl: 'https://api.groq.com/openai/v1',
-    models: ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant', 'meta-llama/llama-4-scout-17b-16e-instruct', 'qwen/qwen3-32b', 'openai/gpt-oss-120b'],
-  },
-  {
-    id: 'cohere',
-    label: 'Cohere',
-    baseUrl: 'https://api.cohere.com',
-    models: ['command-a-03-2025', 'command-a-reasoning-08-2025', 'command-r7b-12-2024'],
-  },
-  {
-    id: 'perplexity',
-    label: 'Perplexity',
-    baseUrl: 'https://api.perplexity.ai',
-    models: ['sonar-pro', 'sonar-reasoning-pro', 'sonar-deep-research', 'sonar-reasoning', 'sonar'],
-  },
-  {
-    id: 'together',
-    label: 'Together AI',
-    baseUrl: 'https://api.together.xyz',
-    models: ['deepseek-ai/DeepSeek-V4-Pro', 'Qwen/Qwen3.5-397B-A17B', 'deepseek-ai/DeepSeek-V3.1', 'meta-llama/Llama-3.3-70B-Instruct-Turbo', 'moonshotai/Kimi-K2.6'],
-  },
-  {
-    id: 'fireworks',
-    label: 'Fireworks AI',
-    baseUrl: 'https://api.fireworks.ai/inference/v1',
-    models: ['accounts/fireworks/models/deepseek-v3.2', 'accounts/fireworks/models/qwen3-235b-a22b', 'accounts/fireworks/models/llama4-maverick-instruct-basic', 'accounts/fireworks/models/kimi-k2p5'],
-  },
-  {
-    id: 'openrouter',
-    label: 'OpenRouter',
-    baseUrl: 'https://openrouter.ai/api/v1',
-    models: ['openai/gpt-5.5', 'anthropic/claude-opus-4-7', 'google/gemini-3.1-pro-preview', 'x-ai/grok-4.20', 'deepseek/deepseek-v4-pro'],
-  },
-  {
-    id: 'custom',
-    label: 'Custom',
-    baseUrl: '',
-    models: [],
-  },
-]
+function saveCustomModelToCache(providerId: string, customModelName: string) {
+  try {
+    const cache = loadCustomModelCache()
+    cache[providerId] = customModelName
+    localStorage.setItem(CUSTOM_MODEL_CACHE_KEY, JSON.stringify(cache))
+  } catch {}
+}
 
-function detectProvider(settings: Settings): string {
-  for (const p of PROVIDER_PRESETS) {
-    if (p.id === 'custom') continue
-    if (settings.baseUrl === p.baseUrl || p.models.includes(settings.model)) {
-      return p.id
-    }
-  }
-  return 'custom'
+function getCustomModelFromCache(providerId: string): string {
+  return loadCustomModelCache()[providerId] || ''
 }
 
 function resolveInitialModelState(settings: Settings, providerId: string): { model: string; customModel: string } {
@@ -117,32 +49,44 @@ function resolveInitialModelState(settings: Settings, providerId: string): { mod
   if (preset.models.includes(settings.model)) {
     return { model: settings.model, customModel: settings.customModel }
   }
-  return { model: 'custom', customModel: settings.model }
+  const cached = getCustomModelFromCache(providerId)
+  return { model: 'custom', customModel: cached || settings.model }
 }
 
 export default function SettingsPanel({ currentSettings, onClose, onSave }: SettingsSidebarProps) {
   const { t } = useI18n()
 
   const [apiKey, setApiKey] = useState(currentSettings.apiKey)
-  const [provider, setProvider] = useState(() => detectProvider(currentSettings))
-  const [model, setModel] = useState(() => resolveInitialModelState(currentSettings, detectProvider(currentSettings)).model)
-  const [customModel, setCustomModel] = useState(() => resolveInitialModelState(currentSettings, detectProvider(currentSettings)).customModel)
+  const [provider, setProvider] = useState(() => resolveInitialProviderId(currentSettings))
+  const [model, setModel] = useState(() => resolveInitialModelState(currentSettings, resolveInitialProviderId(currentSettings)).model)
+  const [customModel, setCustomModel] = useState(() => resolveInitialModelState(currentSettings, resolveInitialProviderId(currentSettings)).customModel)
   const [baseUrl, setBaseUrl] = useState(currentSettings.baseUrl)
-  const [maxTokens, setMaxTokens] = useState(currentSettings.maxTokens)
   const [temperature, setTemperature] = useState(currentSettings.temperature)
-  const [thinkingBudget, setThinkingBudget] = useState(currentSettings.thinkingBudget)
+  const [thinkingLevel, setThinkingLevel] = useState<ThinkingLevel>(currentSettings.thinkingLevel)
   const [showApiKey, setShowApiKey] = useState(false)
 
   const handleProviderChange = (newProvider: string) => {
+    if (model === 'custom' && customModel.trim()) {
+      saveCustomModelToCache(provider, customModel)
+    }
+
     setProvider(newProvider)
     const preset = PROVIDER_PRESETS.find((p) => p.id === newProvider)
     if (preset) {
       setBaseUrl(preset.baseUrl)
       if (preset.models.length > 0) {
-        setModel(preset.models[0])
-        setCustomModel('')
+        const cached = getCustomModelFromCache(newProvider)
+        if (cached) {
+          setModel('custom')
+          setCustomModel(cached)
+        } else {
+          setModel(preset.models[0])
+          setCustomModel('')
+        }
       } else {
         setModel('custom')
+        const cached = getCustomModelFromCache(newProvider)
+        setCustomModel(cached)
       }
     }
   }
@@ -153,15 +97,19 @@ export default function SettingsPanel({ currentSettings, onClose, onSave }: Sett
     const finalModel = isCustomModel ? customModel : model
     if (!finalModel.trim()) return
 
+    if (isCustomModel && customModel.trim()) {
+      saveCustomModelToCache(provider, customModel)
+    }
+
     onSave({
       apiKey,
       model: finalModel,
       baseUrl: baseUrl.replace(/\/+$/, ''),
       customModel,
-      maxTokens,
+      thinkingLevel,
       temperature,
-      thinkingBudget,
       prompt: '',
+      selectedProvider: provider,
     })
     onClose()
   }
@@ -182,15 +130,12 @@ export default function SettingsPanel({ currentSettings, onClose, onSave }: Sett
         <div className="flex flex-col gap-5">
           <div>
             <label className={labelClass}>{t('settings.provider')}</label>
-            <select
+            <SmoothSelect
+              aria-label={t('settings.provider')}
               value={provider}
-              onChange={(e) => handleProviderChange(e.target.value)}
-              className={`${inputClass} cursor-pointer appearance-none`}
-            >
-              {PROVIDER_PRESETS.map((p) => (
-                <option key={p.id} value={p.id}>{p.label}</option>
-              ))}
-            </select>
+              onChange={handleProviderChange}
+              options={PROVIDER_PRESETS.map((p) => ({ value: p.id, label: p.label }))}
+            />
           </div>
 
           <div>
@@ -218,23 +163,22 @@ export default function SettingsPanel({ currentSettings, onClose, onSave }: Sett
           <div>
             <label className={labelClass}>{t('settings.model')}</label>
             {currentPreset && currentPreset.models.length > 0 ? (
-              <select
+              <SmoothSelect
+                aria-label={t('settings.model')}
                 value={isCustomModel ? 'custom' : model}
-                onChange={(e) => {
-                  if (e.target.value === 'custom') {
+                onChange={(v) => {
+                  if (v === 'custom') {
                     setModel('custom')
                   } else {
-                    setModel(e.target.value)
+                    setModel(v)
                     setCustomModel('')
                   }
                 }}
-                className={`${inputClass} cursor-pointer appearance-none`}
-              >
-                {currentPreset.models.map((m) => (
-                  <option key={m} value={m}>{m}</option>
-                ))}
-                <option value="custom">{t('settings.customModelOption')}</option>
-              </select>
+                options={[
+                  ...currentPreset.models.map((m) => ({ value: m, label: m })),
+                  { value: 'custom', label: t('settings.customModelOption') },
+                ]}
+              />
             ) : (
               <input
                 type="text"
@@ -263,8 +207,13 @@ export default function SettingsPanel({ currentSettings, onClose, onSave }: Sett
             <input
               type="text"
               value={baseUrl}
-              onChange={(e) => setBaseUrl(e.target.value)}
-              placeholder="https://api.openai.com"
+              onChange={(e) => {
+                const v = e.target.value
+                setBaseUrl(v)
+                const fromUrl = findProviderIdByBaseUrl(v)
+                setProvider(fromUrl ?? 'custom')
+              }}
+              placeholder={t('settings.baseUrlPlaceholder')}
               className={inputClass}
             />
             <p className="text-text-tertiary text-xs mt-1.5">
@@ -272,34 +221,25 @@ export default function SettingsPanel({ currentSettings, onClose, onSave }: Sett
             </p>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className={labelClass}>{t('settings.maxTokens')}</label>
-              <input
-                type="number"
-                min={1}
-                max={128000}
-                value={maxTokens}
-                onChange={(e) => setMaxTokens(Number(e.target.value))}
-                className={inputClass}
-              />
-            </div>
-            <div>
-              <label className={labelClass}>{t('settings.thinkingBudget')}</label>
-              <input
-                type="number"
-                min={0}
-                max={100000}
-                step={1024}
-                value={thinkingBudget}
-                onChange={(e) => setThinkingBudget(Number(e.target.value))}
-                className={inputClass}
-              />
-              <p className="text-text-tertiary text-xs mt-1.5">
-                {t('settings.thinkingBudgetHint')}
-              </p>
-            </div>
+          <div>
+            <label className={labelClass}>{t('settings.thinking')}</label>
+            <SmoothSelect
+              aria-label={t('settings.thinking')}
+              value={thinkingLevel}
+              onChange={(v) => setThinkingLevel(v as ThinkingLevel)}
+              options={THINKING_LEVELS.map((lvl) => ({
+                value: lvl,
+                label: t(`settings.thinkingLevel.${lvl}`),
+              }))}
+            />
+            <p className="text-text-tertiary text-xs mt-1.5">
+              {t('settings.thinkingHint')}
+            </p>
           </div>
+
+          <p className="text-text-tertiary text-xs leading-relaxed border border-border/60 rounded-lg px-3 py-2.5 bg-surface/50">
+            {t('settings.maxOutputNote')}
+          </p>
 
           <div>
             <label className={labelClass}>{t('settings.temperature')}: {temperature.toFixed(1)}</label>

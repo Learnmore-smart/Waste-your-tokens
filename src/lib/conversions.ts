@@ -84,12 +84,18 @@ export function tokensToCarbonGrams(tokens: number): number {
   return tokens * 0.0002
 }
 
+/** 约 404 g CO₂ / 英里：美国乘用车平均值（数量级，用于类比）。 */
+const GRAMS_CO2_PER_CAR_MILE = 404
+
 export function carbonToMiles(carbonGrams: number): number {
-  return carbonGrams * 0.006
+  return carbonGrams / GRAMS_CO2_PER_CAR_MILE
 }
 
+/** 成树一年约可吸收 21 kg CO₂（Arbor Day 等常用数量级，用于类比）。 */
+const GRAMS_CO2_PER_TREE_YEAR = 21_000
+
 export function carbonToTrees(carbonGrams: number): number {
-  return carbonGrams / 21000
+  return carbonGrams / GRAMS_CO2_PER_TREE_YEAR
 }
 
 export function carbonToSmartphones(carbonGrams: number): number {

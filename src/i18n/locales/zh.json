@@ -1,7 +1,7 @@
 {
   "app": {
-    "title": "浪费你的 Token",
-    "description": "最令人满足的 LLM API Token 燃烧方式"
+    "title": "浪费你的词元",
+    "description": "最令人满足的 LLM API 词元燃烧方式"
   },
   "tabs": {
     "burn": "燃烧",
@@ -10,29 +10,49 @@
     "settings": "设置"
   },
   "header": {
-    "tokens": "Token",
+    "tokens": "词元",
     "calls": "次调用"
   },
   "burn": {
-    "autoBurn": "自动燃烧",
-    "interval": "间隔",
-    "dismiss": "忽略",
-    "reset": "重置",
-    "export": "导出"
+    "dismiss": "忽略"
+  },
+  "duo": {
+    "solo": "Solo",
+    "duo": "Duo",
+    "aria": "在 Solo 与 Duo 之间切换",
+    "caption": "Duo 为两路流并行、每轮两条随机提示；默认 Solo 为单路。非燃烧中可随时切回。",
+    "panelA": "Duo I",
+    "panelB": "Duo II",
+    "agentA": "Duo I",
+    "agentB": "Duo II"
+  },
+  "homeStats": {
+    "tokens": "累计词元（本会话）",
+    "calls": "API 轮次",
+    "cost": "预估费用（人民币）"
+  },
+  "stream": {
+    "title": "流式内容",
+    "thought": "模型推理",
+    "reply": "输出",
+    "awaiting": "正在连接…",
+    "caption": "OpenAI 兼容流式；提示词随机。每轮结束会自动开始下一轮，直到你点「停止」；短暂故障会自动重试。输出区支持 LaTeX 展示：用 $$...$$、\\[...\\] 或 \\(...\\)。词元数优先用上游 usage，否则按长度估算。推理与输出缓存在本机，新请求不会先清空，刷新后仍在；仅点「清空」会删除。",
+    "reset": "清空",
+    "download": "下载",
+    "captionDuo": "Duo：两路 API 流并行，每轮各用一条随机提示；停止时两路同时结束。每块面板可单独下载。缓存、LaTeX、重试与单人模式相同。"
   },
   "burnButton": {
-    "idle": "燃烧 Token",
+    "idle": "开始燃烧",
     "burning": "停止",
-    "autoBurning": "停止",
     "error": "重试"
   },
   "impact": {
     "title": "环境影响",
-    "subtitle": "每一个被燃烧的 Token 都在地球上留下了痕迹。这是你的。",
+    "subtitle": "每一个被燃烧的词元都在地球上留下了痕迹。这是你的。",
     "carbonFootprint": {
       "label": "碳足迹",
       "suffix": " g CO₂",
-      "detail": "Token 生成产生的预估排放量"
+      "detail": "词元生成产生的预估排放量"
     },
     "milesDriven": {
       "label": "行驶里程",
@@ -72,7 +92,7 @@
   },
   "settings": {
     "title": "配置",
-    "subtitle": "设置你的 API 提供商和偏好。提示词随机生成以最大化 Token 浪费。",
+    "subtitle": "设置你的 API 提供商和偏好。提示词随机生成以最大化词元浪费。",
     "provider": "提供商",
     "apiKey": "API 密钥",
     "show": "显示",
@@ -82,10 +102,17 @@
     "customModelOption": "自定义…",
     "customModelPlaceholder": "输入自定义模型名称",
     "baseUrl": "基础 URL",
-    "baseUrlHint": "必须是兼容 OpenAI 的 API 端点。末尾斜杠会自动移除。",
-    "maxTokens": "最大 Token 数",
-    "thinkingBudget": "思考预算",
-    "thinkingBudgetHint": ">0 用于推理模型。0 = 禁用。",
+    "baseUrlPlaceholder": "https://api.openai.com/v1",
+    "baseUrlHint": "OpenAI 兼容的 Chat Completions 根地址，与 OpenAI SDK 的 `baseURL` 相同（`…/chat/completions` 之前的整段 URL）。末尾斜杠会自动移除。",
+    "thinking": "推理 / 思考",
+    "thinkingHint": "强度会按各提供商（OpenAI、Gemini、Anthropic 等）分别映射。o 系列模型仅使用「最大补全」路径。",
+    "thinkingLevel": {
+      "off": "关闭",
+      "high": "高",
+      "xhigh": "更高",
+      "max": "最高"
+    },
+    "maxOutputNote": "为最大化燃烧，补全侧 token 始终请求为允许的上限（最高约 128k），此项不可由用户调低。",
     "temperature": "温度",
     "precise": "精确 (0)",
     "creative": "创意 (2)",
@@ -94,5 +121,23 @@
   "languageToggle": {
     "en": "EN",
     "zh": "中文"
+  },
+  "legal": {
+    "disclaimer": "「浪费你的 Token」仅供娱乐。你自行承担使用本网站及任何 API 密钥的风险。我们不对因燃烧 Token、设置不当或第三方 API 政策而产生的费用、超额账单、数据丢失、账号限制或其他损害负责。使用本网站即表示你同意运营者与贡献者对你不负任何责任。此处内容不构成法律或财务建议。"
+  },
+  "errorBoundary": {
+    "badge": "错误",
+    "title": "出错了",
+    "description": "应用遇到意外错误。可尝试重新加载——你的设置仍保存在本机。",
+    "retry": "重新加载页面",
+    "home": "返回首页",
+    "detailLabel": "详情"
+  },
+  "notFound": {
+    "code": "404",
+    "title": "页面不存在",
+    "description": "这个地址无效——这里没有可燃烧的词元。",
+    "home": "返回首页",
+    "hint": "请检查链接是否正确，或回到应用继续流式输出。"
   }
 }

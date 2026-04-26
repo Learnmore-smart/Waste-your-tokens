@@ -3,6 +3,7 @@
 import { createContext, useContext, useState, useCallback, useEffect, ReactNode } from 'react'
 import en from '@/i18n/locales/en.json'
 import zh from '@/i18n/locales/zh.json'
+import { formatSessionCostUsd } from '@/lib/sessionCost'
 
 export type Locale = 'en' | 'zh'
 
@@ -15,6 +16,8 @@ interface I18nContextType {
   locale: Locale
   setLocale: (locale: Locale) => void
   t: (key: string) => string
+  /** Session cost from `useTokenBurner` is USD; Chinese UI uses CNY for display. */
+  formatCost: (estimatedCostUsd: number) => string
 }
 
 const I18nContext = createContext<I18nContextType | null>(null)
@@ -44,6 +47,10 @@ export function I18nProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
+  useEffect(() => {
+    document.title = getNestedValue(translations[locale], 'app.title')
+  }, [locale])
+
   const setLocale = useCallback((newLocale: Locale) => {
     setLocaleState(newLocale)
     localStorage.setItem(STORAGE_KEY, newLocale)
@@ -54,8 +61,13 @@ export function I18nProvider({ children }: { children: ReactNode }) {
     return getNestedValue(translations[locale], key)
   }, [locale])
 
+  const formatCost = useCallback(
+    (estimatedCostUsd: number) => formatSessionCostUsd(estimatedCostUsd, locale),
+    [locale]
+  )
+
   return (
-    <I18nContext.Provider value={{ locale, setLocale, t }}>
+    <I18nContext.Provider value={{ locale, setLocale, t, formatCost }}>
       {children}
     </I18nContext.Provider>
   )

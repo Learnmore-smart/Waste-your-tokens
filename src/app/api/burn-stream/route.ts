@@ -27,8 +27,6 @@ function isRateLimited(): boolean {
   return false;
 }
 
-const REQUEST_TIMEOUT_MS = 120_000;
-
 const DEFAULT_PROMPT =
   "Write a detailed 2000-word essay about absolutely nothing. Then summarize your essay into a single word. Then write another 2000-word essay expanding on that single word. Be as verbose and repetitive as possible.";
 
@@ -77,7 +75,6 @@ export async function POST(request: NextRequest) {
   const cleanedBase = stripChatCompletionsSuffix(rawBaseUrl);
 
   try {
-    // validate URL shape
     new URL(cleanedBase);
   } catch {
     return NextResponse.json(
@@ -88,60 +85,95 @@ export async function POST(request: NextRequest) {
 
   const apiUrl = resolveOpenAiChatCompletionsUrl(cleanedBase);
 
-  const requestBody = buildOpenAiStyleChatBody(cleanedBase, {
+  let requestBody = buildOpenAiStyleChatBody(cleanedBase, {
     model,
     prompt,
     temperature,
     thinkingLevel,
-    stream: false,
-    includeUsage: false,
+    stream: true,
+    includeUsage: true,
   });
 
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-
-  try {
-    const response = await fetch(apiUrl, {
+  const tryStream = async (): Promise<Response> =>
+    fetch(apiUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify(requestBody),
-      signal: controller.signal,
     });
 
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => null);
-      const errorMessage =
-        errorData?.error?.message || errorData?.message || `API returned status ${response.status}`;
-      return NextResponse.json(
-        { error: errorMessage },
-        { status: response.status }
-      );
-    }
+  let upstream = await tryStream();
 
-    const data = await response.json();
-
-    return NextResponse.json({
-      model: data.model ?? model,
-      prompt_tokens: data.usage?.prompt_tokens ?? 0,
-      completion_tokens: data.usage?.completion_tokens ?? 0,
-      total_tokens: data.usage?.total_tokens ?? 0,
+  // Some providers reject stream_options, huge max_tokens, or thinking fields — progressively strip
+  if (!upstream.ok && upstream.status === 400) {
+    requestBody = buildOpenAiStyleChatBody(cleanedBase, {
+      model,
+      prompt,
+      temperature,
+      thinkingLevel,
+      stream: true,
+      includeUsage: false,
     });
-  } catch (err) {
-    if (err instanceof Error && err.name === "AbortError") {
-      return NextResponse.json(
-        { error: "Request timed out. The API took too long to respond." },
-        { status: 504 }
-      );
-    }
-    const message = err instanceof Error ? err.message : "Unknown error";
-    return NextResponse.json(
-      { error: message },
-      { status: 500 }
-    );
-  } finally {
-    clearTimeout(timeoutId);
+    upstream = await tryStream();
   }
+  if (!upstream.ok && upstream.status === 400) {
+    requestBody = buildOpenAiStyleChatBody(cleanedBase, {
+      model,
+      prompt,
+      temperature,
+      thinkingLevel: "off",
+      stream: true,
+      includeUsage: false,
+      maxOutputCap: 4096,
+    });
+    upstream = await tryStream();
+  }
+
+  if (!upstream.ok) {
+    const raw = await upstream.text();
+    let errorMessage = `API returned status ${upstream.status}`;
+    if (raw) {
+      try {
+        const err = JSON.parse(raw) as {
+          error?: { message?: string; code?: number } | string;
+          message?: string;
+        };
+        const e = err.error;
+        if (typeof e === "string") {
+          errorMessage = e;
+        } else if (e && typeof e === "object" && typeof e.message === "string") {
+          errorMessage = e.message;
+        } else if (typeof err.message === "string") {
+          errorMessage = err.message;
+        } else {
+          errorMessage = raw.slice(0, 400);
+        }
+      } catch {
+        errorMessage = raw.slice(0, 400);
+      }
+    }
+    return NextResponse.json(
+      { error: errorMessage },
+      { status: upstream.status }
+    );
+  }
+
+  if (!upstream.body) {
+    return NextResponse.json(
+      { error: "Provider returned empty stream body" },
+      { status: 502 }
+    );
+  }
+
+  return new Response(upstream.body, {
+    status: 200,
+    headers: {
+      "Content-Type": upstream.headers.get("Content-Type") ?? "text/event-stream; charset=utf-8",
+      "Cache-Control": "no-cache, no-transform",
+      Connection: "keep-alive",
+      "X-Accel-Buffering": "no",
+    },
+  });
 }

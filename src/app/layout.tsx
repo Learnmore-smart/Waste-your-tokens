@@ -17,6 +17,7 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://rateministere.com/waste-your-tokens/"),
   title: "Waste Your Tokens",
   description: "The most satisfying way to burn LLM API tokens",
 };
