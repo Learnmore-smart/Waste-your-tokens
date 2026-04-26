@@ -5,6 +5,7 @@
   },
   "tabs": {
     "burn": "Burn",
+    "calculator": "Calculator",
     "impact": "Impact",
     "history": "History",
     "settings": "Settings"
@@ -42,6 +43,8 @@
     "awaiting": "Connecting…",
     "caption": "OpenAI-style streaming. Random prompts; rounds run until you click Stop. LaTeX in output: $$...$$, \\[...\\], or \\(...\\). Token counts from usage or a length estimate. Transient errors are retried. Reasoning and output stay cached locally; a new request does not clear them until the first token arrives. Only “Clear” removes them. Refreshed content persists.",
     "reset": "Clear",
+    "copy": "Copy",
+    "copied": "Copied!",
     "download": "Download",
     "captionDuo": "Duo: two API streams in parallel (two random prompts per cycle). Stopping applies to both. Each panel can download its own output. Caching, LaTeX, and retries are the same as solo.",
     "captionSquadN": "Squad ({{n}}): parallel API streams, one random prompt per agent. Stop ends every stream. Caching, LaTeX, and retries match solo."
@@ -85,6 +88,34 @@
       "detail": "Equivalent to streaming video for this long"
     },
     "disclaimer": "Estimates based on Patterson et al. (2022), EPA (2024), Carbon Trust, and Arbor Day Foundation data. Actual emissions vary by data center energy source, model size, and hardware efficiency."
+  },
+  "calc": {
+    "title": "Token Impact Calculator",
+    "subtitle": "Enter your token usage to visualize the environmental footprint.",
+    "inputTokens": "Input tokens",
+    "outputTokens": "Output tokens",
+    "total": "Total tokens",
+    "scenarios": "Quick scenarios",
+    "footprintSection": "Equivalent impact",
+    "emptyHint": "Enter token amounts, or pick a preset in Quick scenarios, to see equivalent impact.",
+    "clear": "Clear",
+    "preset": {
+      "chat": "Quick chat",
+      "essay": "Essay",
+      "coding": "Coding session",
+      "heavy": "Heavy workload",
+      "mega": "Mega batch"
+    },
+    "severity": {
+      "none": "No usage",
+      "minimal": "Very light",
+      "low": "Light",
+      "moderate": "Moderate",
+      "elevated": "Elevated",
+      "high": "High",
+      "severe": "Very high",
+      "extreme": "Exceptional"
+    }
   },
   "history": {
     "empty": "No burn history yet. Start burning to see records here.",

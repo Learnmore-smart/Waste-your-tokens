@@ -5,6 +5,7 @@
   },
   "tabs": {
     "burn": "燃烧",
+    "calculator": "计算器",
     "impact": "影响",
     "history": "历史",
     "settings": "设置"
@@ -42,6 +43,8 @@
     "awaiting": "正在连接…",
     "caption": "OpenAI 兼容流式；提示词随机。每轮结束会自动开始下一轮，直到你点「停止」；短暂故障会自动重试。输出区支持 LaTeX 展示：用 $$...$$、\\[...\\] 或 \\(...\\)。词元数优先用上游 usage，否则按长度估算。推理与输出缓存在本机，新请求不会先清空，刷新后仍在；仅点「清空」会删除。",
     "reset": "清空",
+    "copy": "复制",
+    "copied": "已复制!",
     "download": "下载",
     "captionDuo": "Duo：两路 API 流并行，每轮各用一条随机提示；停止时两路同时结束。每块面板可单独下载。缓存、LaTeX、重试与单人模式相同。",
     "captionSquadN": "小队（{{n}} 路）：多路流并行，每名代理每轮各一条随机提示；停止时全部结束。缓存、LaTeX、重试与 Solo 相同。"
@@ -85,6 +88,34 @@
       "detail": "相当于流媒体播放这么长时间"
     },
     "disclaimer": "估算基于 Patterson 等人 (2022)、EPA (2024)、Carbon Trust 和 Arbor Day Foundation 的数据。实际排放量因数据中心能源来源、模型大小和硬件效率而异。"
+  },
+  "calc": {
+    "title": "词元影响计算器",
+    "subtitle": "输入你的词元用量，查看对环境的影响。",
+    "inputTokens": "输入词元",
+    "outputTokens": "输出词元",
+    "total": "总词元",
+    "scenarios": "快速场景",
+    "footprintSection": "等效影响",
+    "emptyHint": "输入词元或点选「快速场景」，将用量换成日常等效对比。",
+    "clear": "清除",
+    "preset": {
+      "chat": "简短对话",
+      "essay": "写作文章",
+      "coding": "编程会话",
+      "heavy": "重度使用",
+      "mega": "超大批量"
+    },
+    "severity": {
+      "none": "无用量",
+      "minimal": "很轻",
+      "low": "较轻",
+      "moderate": "中等",
+      "elevated": "偏高",
+      "high": "高",
+      "severe": "很高",
+      "extreme": "罕见量级"
+    }
   },
   "history": {
     "empty": "暂无燃烧记录。开始燃烧以在此查看记录。",

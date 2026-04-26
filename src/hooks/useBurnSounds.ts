@@ -1,9 +1,41 @@
 'use client'
 
-import { useCallback, useRef } from 'react'
+import { useCallback, useRef, useState, useEffect } from 'react'
+
+const MUTED_KEY = 'waste-tokens-sound-muted'
+
+function loadMuted(): boolean {
+  if (typeof window === 'undefined') return false
+  try {
+    return localStorage.getItem(MUTED_KEY) === '1'
+  } catch {
+    return false
+  }
+}
 
 export function useBurnSounds() {
   const audioContextRef = useRef<AudioContext | null>(null)
+  const [muted, setMuted] = useState(false)
+  const mutedRef = useRef(false)
+
+  useEffect(() => {
+    const v = loadMuted()
+    setMuted(v)
+    mutedRef.current = v
+  }, [])
+
+  const toggleMuted = useCallback(() => {
+    setMuted((prev) => {
+      const next = !prev
+      mutedRef.current = next
+      try {
+        localStorage.setItem(MUTED_KEY, next ? '1' : '0')
+      } catch {
+        // ignore
+      }
+      return next
+    })
+  }, [])
 
   const getContext = useCallback(() => {
     if (!audioContextRef.current) {
@@ -13,6 +45,7 @@ export function useBurnSounds() {
   }, [])
 
   const playBurnSound = useCallback(() => {
+    if (mutedRef.current) return
     try {
       const ctx = getContext()
       const oscillator = ctx.createOscillator()
@@ -34,6 +67,7 @@ export function useBurnSounds() {
   }, [getContext])
 
   const playCashSound = useCallback(() => {
+    if (mutedRef.current) return
     try {
       const ctx = getContext()
       const oscillator = ctx.createOscillator()
@@ -56,6 +90,7 @@ export function useBurnSounds() {
   }, [getContext])
 
   const playStopSound = useCallback(() => {
+    if (mutedRef.current) return
     try {
       const ctx = getContext()
       const oscillator = ctx.createOscillator()
@@ -76,5 +111,5 @@ export function useBurnSounds() {
     } catch {}
   }, [getContext])
 
-  return { playBurnSound, playCashSound, playStopSound }
+  return { playBurnSound, playCashSound, playStopSound, muted, toggleMuted }
 }

@@ -22,6 +22,7 @@ export default function BurnButton({ onClick, onStop, disabled, state }: BurnBut
   }
 
   const isActive = state === 'burning'
+  const isIdle = state === 'idle'
 
   return (
     <div className="relative inline-block pt-1 pb-2 px-1">
@@ -31,8 +32,7 @@ export default function BurnButton({ onClick, onStop, disabled, state }: BurnBut
           aria-hidden
           initial={false}
           animate={{
-            opacity: [0.35, 0.7, 0.45, 0.75, 0.4],
-            scale: [1, 1.04, 0.99, 1.03, 1],
+            opacity: [0.35, 0.75, 0.45, 0.7, 0.35],
           }}
           transition={{ duration: 1.4, repeat: Infinity, ease: 'easeInOut' }}
           style={{
@@ -78,25 +78,49 @@ export default function BurnButton({ onClick, onStop, disabled, state }: BurnBut
         `}
         animate={
           shouldReduce
-            ? { scale: 1 }
+            ? undefined
             : isActive
-            ? { scale: [1, 1.035, 0.99, 1.03, 1] }
+            ? {
+                boxShadow: [
+                  '0 0 40px rgba(255,120,40,0.45), 0 0 80px rgba(255,60,0,0.2), inset 0 -12px 24px rgba(120,0,0,0.35)',
+                  '0 0 55px rgba(255,140,50,0.6), 0 0 100px rgba(255,80,10,0.3), inset 0 -12px 24px rgba(150,0,0,0.4)',
+                  '0 0 40px rgba(255,120,40,0.45), 0 0 80px rgba(255,60,0,0.2), inset 0 -12px 24px rgba(120,0,0,0.35)',
+                ],
+              }
             : state === 'error'
             ? { scale: [1.02, 1] }
-            : { scale: 1 }
+            : undefined
         }
         transition={
           shouldReduce
             ? { duration: 0 }
             : isActive
-            ? { duration: 1.05, repeat: Infinity, ease: 'easeInOut' }
+            ? { duration: 1.8, repeat: Infinity, ease: 'easeInOut' }
             : state === 'error'
             ? { duration: 0.3, ease: 'easeOut' }
-            : { duration: 0 }
+            : { duration: 0.2 }
         }
         whileHover={!disabled && !isActive ? { scale: 1.03 } : undefined}
         whileTap={!disabled && !isActive ? { scale: 0.97 } : undefined}
       >
+        {/* Idle: soft warm gradient that slowly drifts inside the button */}
+        {isIdle && !shouldReduce && (
+          <motion.div
+            className="absolute inset-0 pointer-events-none rounded-2xl"
+            aria-hidden
+            style={{ filter: 'blur(20px)' }}
+            animate={{
+              background: [
+                'radial-gradient(ellipse 70% 60% at 30% 70%, rgba(255,80,40,0.12), rgba(200,40,20,0.06) 50%, transparent 80%)',
+                'radial-gradient(ellipse 80% 50% at 70% 30%, rgba(255,100,50,0.14), rgba(220,50,30,0.07) 50%, transparent 80%)',
+                'radial-gradient(ellipse 60% 70% at 50% 60%, rgba(240,60,30,0.11), rgba(180,30,10,0.05) 50%, transparent 80%)',
+                'radial-gradient(ellipse 70% 60% at 30% 70%, rgba(255,80,40,0.12), rgba(200,40,20,0.06) 50%, transparent 80%)',
+              ],
+            }}
+            transition={{ duration: 6, repeat: Infinity, ease: 'easeInOut' }}
+          />
+        )}
+
         {isActive && <FireEffect />}
 
         {isActive && !shouldReduce && (

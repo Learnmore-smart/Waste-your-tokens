@@ -219,11 +219,35 @@ export function useTokenBurner(parallelCount: number) {
     let pt = Number(u?.prompt_tokens ?? u?.input_tokens ?? 0) || 0
     let ct = Number(u?.completion_tokens ?? u?.output_tokens ?? 0) || 0
     let tt = Number(u?.total_tokens ?? 0) || 0
+
     if (tt === 0 && (pt > 0 || ct > 0)) tt = pt + ct
     // Some providers only send total_tokens; without split, cost/impact (cost uses prompt+completion) stay at 0.
     if (tt > 0 && pt === 0 && ct === 0) {
       pt = Math.floor(tt / 2)
       ct = tt - pt
+    }
+
+    // ── Sanity-check: many providers only report prompt_tokens in SSE streaming
+    //    and send completion_tokens as 0.  When we have actual streamed content
+    //    but the reported count is suspiciously low, use text-based estimation.
+    const outputTextLen = snap.text.length + snap.thought.length
+    if (outputTextLen > 0) {
+      const est = estimateTokensFromText(promptText, snap.text, snap.thought)
+
+      // Provider didn't report completion usage → use estimation.
+      if (ct === 0) {
+        ct = est.completion_tokens
+      } else if (ct > 0 && outputTextLen > ct * 20) {
+        // Reported completion_tokens is absurdly small relative to actual output
+        // (< 1 token per 20 chars is impossible) → boost with estimation.
+        ct = Math.max(ct, est.completion_tokens)
+      }
+
+      if (pt === 0) {
+        pt = est.prompt_tokens
+      }
+
+      tt = pt + ct
     }
 
     if (tt === 0) {
@@ -232,6 +256,7 @@ export function useTokenBurner(parallelCount: number) {
       ct = est.completion_tokens
       tt = est.total_tokens
     }
+
     return { model, promptDelta: pt, completionDelta: ct, totalDelta: tt }
   }
 

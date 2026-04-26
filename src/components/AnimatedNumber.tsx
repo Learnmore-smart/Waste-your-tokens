@@ -1,7 +1,7 @@
 'use client'
 
 import { useMotionValue, useSpring, useMotionValueEvent } from 'framer-motion'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 interface AnimatedNumberProps {
   value: number
@@ -16,9 +16,18 @@ function formatParts(latest: number, decimals: number, prefix: string, suffix: s
 }
 
 export default function AnimatedNumber({ value, decimals = 0, prefix = '', suffix = '' }: AnimatedNumberProps) {
-  const motionVal = useMotionValue(value)
+  const motionVal = useMotionValue(0)
   const springVal = useSpring(motionVal, { stiffness: 150, damping: 25, mass: 0.5 })
-  const [text, setText] = useState(() => formatParts(value, decimals, prefix, suffix))
+  const [text, setText] = useState(() => formatParts(0, decimals, prefix, suffix))
+  const mounted = useRef(false)
+
+  // After hydration, jump to the real value so the spring animates from 0 → value.
+  useEffect(() => {
+    if (!mounted.current) {
+      mounted.current = true
+      motionVal.set(value)
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     motionVal.set(value)
